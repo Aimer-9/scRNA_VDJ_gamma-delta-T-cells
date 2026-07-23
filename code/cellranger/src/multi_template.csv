@@ -1,0 +1,14 @@
+[gene-expression]
+reference,__GEX_REF__
+create-bam,true
+
+[vdj]
+reference,__VDJ_REF__
+inner-enrichment-primers,__VDJ_INNER_ENRICHMENT_PRIMERS__
+
+[libraries]
+fastq_id,fastqs,lanes,feature_types,subsample_rate
+__GEX_FASTQ_PREFIX__,__GEX_FASTQ_PATH__,,Gene Expression,
+__VDJ_T_FASTQ_PREFIX__,__VDJ_T_FASTQ_PATH__,,VDJ-T,
+__VDJ_B_FASTQ_PREFIX__,__VDJ_B_FASTQ_PATH__,,VDJ-B,
+__VDJ_T_GD_FASTQ_PREFIX__,__VDJ_T_GD_FASTQ_PATH__,,VDJ-T-GD,
