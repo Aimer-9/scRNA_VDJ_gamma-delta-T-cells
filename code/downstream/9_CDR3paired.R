@@ -1,6 +1,6 @@
 # R version 4.5.2 (2025-10-31)
 rm(list = ls())
-setwd("/data/huotong/project_tcr/2026May")
+setwd("/path/to/project")
 library(Seurat)
 library(SeuratExtend)
 library(clusterProfiler)
@@ -53,6 +53,7 @@ trajectory_root_cell_type <- "Effector Memory Vd2"
 min_cells_per_gene_for_graph_test <- 10
 graph_test_core_fraction <- 0.7
 
+# Load shared palettes plus common IO, metadata, assay, and plotting helpers.
 source_plotting_shared <- function() {
   candidates <- c(
     "code/downstream/_cache_/plotting_shared.R",
@@ -100,30 +101,6 @@ vd1_hallmark_pathways <- c(
 dir.create(rds_dir, showWarnings = FALSE)
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(table_dir, showWarnings = FALSE)
-
-read_rds_checked <- function(path, label) {
-  if (!file.exists(path)) {
-    stop(
-      "Missing ", label, ": ", normalizePath(path, mustWork = FALSE), "\n",
-      "Current working directory: ", getwd(), "\n",
-      "Run prerequisite scripts or correct the project directory/path.",
-      call. = FALSE
-    )
-  }
-  if (file.info(path)$size == 0) {
-    stop("Empty ", label, ": ", normalizePath(path, mustWork = FALSE), call. = FALSE)
-  }
-  tryCatch(
-    readRDS(path),
-    error = function(e) {
-      stop(
-        "Failed to read ", label, ": ", normalizePath(path, mustWork = FALSE), "\n",
-        "Original error: ", conditionMessage(e),
-        call. = FALSE
-      )
-    }
-  )
-}
 
 get_single_pair_records <- function(paired_cdr3) {
   # Keep only cells with exactly one productive TRD/TRG pair. Cells with more

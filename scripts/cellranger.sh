@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CODE_DIR="$(cd "${ROOT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+CODE_DIR="${ROOT_DIR}/code"
+CELLRANGER_DIR="${CODE_DIR}/cellranger"
 
-FASTQ_QC_SH="${ROOT_DIR}/src/01_fastq_qc.sh"
-GEN_CFG_PY="${ROOT_DIR}/src/02_generate_cellranger_configs.py"
-MULTI_SH="${ROOT_DIR}/src/03_cellranger_multi.sh"
+FASTQ_QC_SH="${CELLRANGER_DIR}/src/01_fastq_qc.sh"
+GEN_CFG_PY="${CELLRANGER_DIR}/src/02_generate_cellranger_configs.py"
+MULTI_SH="${CELLRANGER_DIR}/src/03_cellranger_multi.sh"
 
 pick_first_existing() {
     local path
@@ -27,7 +29,7 @@ SAMPLES="$(pick_first_existing \
     "${CODE_DIR}/config/samples.csv" \
     "${CODE_DIR}/example/config/samples.csv" \
     "${CODE_DIR}/example/input/samples.csv" || true)"
-TEMPLATE="${ROOT_DIR}/src/multi_template.csv"
+TEMPLATE="${CELLRANGER_DIR}/src/multi_template.csv"
 OUTDIR=""
 QC_OUTDIR=""
 THREADS=""
@@ -35,7 +37,7 @@ THREADS=""
 usage() {
     cat <<'USAGE'
 Usage:
-  bash cellranger.sh <subcommand> [options]
+  bash scripts/cellranger.sh <subcommand> [options]
 
 Subcommands:
   dry-run   Validate params.yaml + samples.csv values/paths, then print planned commands
@@ -53,10 +55,10 @@ Options:
   -h, --help        Show help
 
 Examples:
-  bash code/cellranger/cellranger.sh dry-run
-  bash code/cellranger/cellranger.sh qc --params code/config/params.yaml --samples code/config/samples.csv
-  bash code/cellranger/cellranger.sh multi --params code/config/params.yaml --samples code/config/samples.csv
-  bash code/cellranger/cellranger.sh all --params code/config/params.yaml --samples code/config/samples.csv
+  bash scripts/cellranger.sh dry-run
+  bash scripts/cellranger.sh qc --params code/config/params.yaml --samples code/config/samples.csv
+  bash scripts/cellranger.sh multi --params code/config/params.yaml --samples code/config/samples.csv
+  bash scripts/cellranger.sh all --params code/config/params.yaml --samples code/config/samples.csv
 USAGE
 }
 

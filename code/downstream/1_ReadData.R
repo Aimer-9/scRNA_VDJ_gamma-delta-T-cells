@@ -1,6 +1,6 @@
 # R version 4.5.2 (2025-10-31)
 rm(list = ls())
-setwd("/data/huotong/project_tcr/2026May")
+setwd("/path/to/project")
 library(Seurat)
 library(SeuratExtend)
 library(readxl)
@@ -16,7 +16,7 @@ options(
   max.print = 200
 )
 
-cellranger_dir <- "/data/huotong/project_tcr/PM-2025521-zaituna-1062/cellranger"
+cellranger_dir <- "/path/to/cellranger/output"
 metadata_file <- "config/samples.csv"
 rds_dir <- "rds"
 figure_dir <- file.path("figures", "1_ReadData")

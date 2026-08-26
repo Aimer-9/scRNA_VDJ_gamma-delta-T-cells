@@ -1,6 +1,6 @@
 # R version 4.5.2 (2025-10-31)
 rm(list = ls())
-setwd("/data/huotong/project_tcr/2026May")
+setwd("/path/to/project")
 library(Seurat)
 library(SeuratExtend)
 library(tidyverse)
@@ -345,7 +345,7 @@ calculate_tcr_diversity_metrics <- function(annotation) {
   clone_counts <- annotation %>%
     filter(!is.na(cdr3), cdr3 != "") %>%
     distinct(barcode, group, sample_name, chain, cdr3) %>%
-    count(group, sample_name, chain, cdr3, name = "clone_cells")
+    dplyr::count(group, sample_name, chain, cdr3, name = "clone_cells")
 
   if (nrow(clone_counts) == 0) {
     return(tibble())
@@ -496,7 +496,7 @@ calculate_clone_size_classes <- function(annotation) {
   clone_counts <- annotation %>%
     filter(!is.na(cdr3), cdr3 != "") %>%
     distinct(barcode, group, sample_name, chain, cdr3) %>%
-    count(group, sample_name, chain, cdr3, name = "clone_cells")
+    dplyr::count(group, sample_name, chain, cdr3, name = "clone_cells")
 
   if (nrow(clone_counts) == 0) {
     return(tibble())

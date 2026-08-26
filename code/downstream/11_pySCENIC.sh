@@ -65,7 +65,7 @@ set -euo pipefail
 #   --motif-annotations PATH       MOTIF_ANNOTATIONS
 #
 # Important run options:
-#   --project-dir DIR              PROJECT_DIR [default: /data/huotong/project_tcr/2026May]
+#   --project-dir DIR              PROJECT_DIR [default: /path/to/project]
 #   --seurat-rds PATH              SEURAT_RDS [default: rds/all_seurat_celltype.rds]
 #   --out-dir DIR                  OUT_DIR [default: pyscenic_10k]
 #   --target-cells INT             TARGET_CELLS [default: 10000]
@@ -81,7 +81,7 @@ set -euo pipefail
 #   --ctx-mode MODE                CTX_MODE [default: custom_multiprocessing]
 #   -h, --help                     Show help
 
-PROJECT_DIR="${PROJECT_DIR:-/data/huotong/project_tcr/2026May}"
+PROJECT_DIR="${PROJECT_DIR:-/path/to/project}"
 SEURAT_RDS="${SEURAT_RDS:-rds/all_seurat_celltype.rds}"
 OUT_DIR="${OUT_DIR:-pyscenic_10k}"
 LOG_DIR="${LOG_DIR:-}"

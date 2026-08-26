@@ -1,0 +1,7 @@
+/botid.sh
+/botid.txt
+/botid.env
+/wecom_mcp.sh
+/wecom_mcp.env
+/ftp.env
+scripts/env/*.env

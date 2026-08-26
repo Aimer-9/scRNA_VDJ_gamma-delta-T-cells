@@ -19,7 +19,7 @@
 #
 # Explicit command:
 #   Rscript code/downstream/12_pySCENIC_visualization.R \
-#     --project-dir /data/huotong/project_tcr/2026May \
+#     --project-dir /path/to/project \
 #     --auc-loom pyscenic_10k/auc_mtx.loom \
 #     --seurat-rds rds/all_seurat_celltype.rds \
 #     --group-by cell_type \
@@ -128,7 +128,7 @@ add_group_color_scale <- function(plot, group_palette) {
 # Paths are interpreted relative to project_dir after parsing.
 parse_args <- function(args) {
   config <- list(
-    project_dir = "/data/huotong/project_tcr/2026May",
+    project_dir = "/path/to/project",
     auc_loom = "pyscenic_10k/auc_mtx.loom",
     regulons_csv = "pyscenic_10k/regulons.csv",
     adj_tsv = "pyscenic_10k/adjacencies.tsv",

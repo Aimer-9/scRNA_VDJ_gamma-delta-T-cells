@@ -1,7 +1,7 @@
 # R version 4.5.2 (2025-10-31)
 rm(list = ls())
-# setwd("/data/huotong/project_tcr/2026May")
-setwd("/data/huotong/project_tcr/2026May")
+# setwd("/path/to/project")
+setwd("/path/to/project")
 library(Seurat)
 library(SeuratExtend)
 library(genekitr) # gene annotation
@@ -254,12 +254,13 @@ annotate_cell_types <- function(seurat_obj) {
 }
 
 grouped_features <- list(
-  "Naive_markers" = c("TCF7", "LEF1", "CCR7", "SELL", "IL7R"),
-  "Vd2_markers" = c("TRDV2", "TNF", "CD40LG", "CD70", "CCL3", "CCL4", "JAML"),
-  "Vd1_markers" = c("TRDV1", "IL10", "FOXP3", "MAL", "FCER1G"),
-  "Proliferating_markers" = c("MKI67", "TOP2A"),
-  "Effector_markers" = c("IL2RA", "GZMA", "GZMB", "GZMH", "IFNG"),
-  "Exhaustion_genes" = c("PDCD1", "CTLA4", "LAG3", "HAVCR2", "TIGIT")
+  "Naive" = c("TCF7", "LEF1", "CCR7", "SELL", "IL7R"),
+  "Vd2" = c("TRDV2", "TNF", "CD40LG"),
+  "Vd1" = c("TRDV1", "MAL", "FCER1G"),
+  "Proliferating" = c("MKI67", "TOP2A"),
+  "Effector" = c("IL2RA", "GZMA", "GZMB", "GZMH", "IFNG"),
+  "Exhaustion" = c("PDCD1", "CTLA4", "LAG3", "HAVCR2", "TIGIT"),
+  "Regulatory" = c("FOXP3", "IL2RA", "IL10")
 )
 
 cd4_cd8_t_cell_markers <- c(

@@ -65,6 +65,112 @@ color_cellcycle <- c(
   "G2M" = "#59A14F"
 )
 
+# Shared script setup and data-access helpers used by multiple downstream
+# analyses. Keep analysis-specific statistics and plotting in the numbered
+# scripts so the workflow remains easy to audit.
+read_rds_checked <- function(path, label) {
+  if (!file.exists(path)) {
+    stop("Missing ", label, ": ", normalizePath(path, mustWork = FALSE), call. = FALSE)
+  }
+  if (file.info(path)$size == 0) {
+    stop("Empty ", label, ": ", normalizePath(path, mustWork = FALSE), call. = FALSE)
+  }
+  readRDS(path)
+}
+
+read_optional_rds <- function(path, label) {
+  if (!file.exists(path) || file.info(path)$size == 0) {
+    message("[SKIP] Missing optional ", label, ": ", normalizePath(path, mustWork = FALSE))
+    return(NULL)
+  }
+  readRDS(path)
+}
+
+normalise_metadata_levels <- function(seurat_obj) {
+  seurat_obj$group <- factor(seurat_obj$group, levels = group_levels)
+  seurat_obj$sample_name <- factor(seurat_obj$sample_name, levels = sample_name_levels)
+  seurat_obj$cell_type <- factor(seurat_obj$cell_type, levels = cell_type_levels)
+  seurat_obj
+}
+
+normalise_annotation_levels <- function(annotation) {
+  annotation %>%
+    dplyr::mutate(
+      group = factor(group, levels = group_levels),
+      sample_name = factor(sample_name, levels = sample_name_levels),
+      cell_type = factor(cell_type, levels = cell_type_levels)
+    )
+}
+
+get_assay_names <- function(seurat_obj) {
+  assay_names <- names(seurat_obj@assays)
+  if (is.null(assay_names)) {
+    assay_names <- character()
+  }
+  as.character(assay_names)
+}
+
+get_reduction_names <- function(seurat_obj) {
+  reduction_names <- names(seurat_obj@reductions)
+  if (is.null(reduction_names)) {
+    reduction_names <- character()
+  }
+  as.character(reduction_names)
+}
+
+join_assay_layers_if_needed <- function(seurat_obj, assay = SeuratObject::DefaultAssay(seurat_obj), label = NULL) {
+  if (!assay %in% get_assay_names(seurat_obj)) {
+    return(seurat_obj)
+  }
+  assay_obj <- seurat_obj[[assay]]
+  assay_layers <- tryCatch(SeuratObject::Layers(assay_obj), error = function(e) character())
+  layer_prefixes <- sub("\\..*$", "", assay_layers)
+  has_split_layers <- length(unique(assay_layers)) > length(unique(layer_prefixes))
+  has_multiple_same_type_layers <- any(table(layer_prefixes) > 1)
+
+  if (inherits(assay_obj, "Assay5") && (has_split_layers || has_multiple_same_type_layers)) {
+    suffix <- if (!is.null(label)) paste0(" for ", label) else ""
+    message("[RUN] Joining Seurat v5 ", assay, " assay layers", suffix, ".")
+    seurat_obj <- JoinLayers(seurat_obj, assay = assay)
+  }
+  seurat_obj
+}
+
+prepare_expression_object <- function(seurat_obj, assay = "RNA", label = NULL) {
+  if (assay %in% get_assay_names(seurat_obj)) {
+    DefaultAssay(seurat_obj) <- assay
+  }
+  join_assay_layers_if_needed(seurat_obj, assay = DefaultAssay(seurat_obj), label = label)
+}
+
+get_umap_reduction <- function(seurat_obj) {
+  if ("umap.unintegrated" %in% get_reduction_names(seurat_obj)) {
+    return("umap.unintegrated")
+  }
+  if ("umap" %in% get_reduction_names(seurat_obj)) {
+    return("umap")
+  }
+  stop("No UMAP reduction found. Expected `umap.unintegrated` or `umap`.", call. = FALSE)
+}
+
+present_genes <- function(seurat_obj, genes) {
+  genes[genes %in% rownames(seurat_obj)]
+}
+
+check_features <- function(seurat_obj, features) {
+  missing_features <- setdiff(features, rownames(seurat_obj))
+  if (length(missing_features) > 0) {
+    stop("Missing feature(s) in Seurat object: ", paste(missing_features, collapse = ", "), call. = FALSE)
+  }
+  features
+}
+
+plot_empty <- function(title, subtitle = NULL) {
+  ggplot2::ggplot() +
+    ggplot2::theme_void() +
+    ggplot2::labs(title = title, subtitle = subtitle)
+}
+
 output_files_exist <- function(paths) {
   all(file.exists(paths) & file.info(paths)$size > 0)
 }

@@ -1,6 +1,6 @@
 # R version 4.5.2 (2025-10-31)
 rm(list = ls())
-setwd("/data/huotong/project_tcr/2026May")
+setwd("/path/to/project")
 library(Seurat)
 library(SeuratExtend)
 library(tidyverse)

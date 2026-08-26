@@ -1,6 +1,6 @@
 # R version 4.5.2 (2025-10-31)
 rm(list = ls())
-setwd("/data/huotong/project_tcr/2026May")
+setwd("/path/to/project")
 library(Seurat)
 library(SeuratExtend)
 library(tidyverse)
@@ -40,6 +40,7 @@ vd1_vd2_comparisons <- list(
   zol_effector_vd2_vs_effector_memory_vd2 = c("ZOL Effector Vd2", "Effector Memory Vd2")
 )
 
+# Load shared palettes plus common IO, metadata, assay, and plotting helpers.
 source_plotting_shared <- function() {
   candidates <- c(
     "code/downstream/_cache_/plotting_shared.R",
@@ -56,36 +57,6 @@ source_plotting_shared()
 
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(table_dir, showWarnings = FALSE)
-
-read_rds_checked <- function(path, label) {
-  if (!file.exists(path)) {
-    stop(
-      "Missing ", label, ": ", normalizePath(path, mustWork = FALSE), "\n",
-      "Current working directory: ", getwd(),
-      call. = FALSE
-    )
-  }
-  if (file.info(path)$size == 0) {
-    stop("Empty ", label, ": ", normalizePath(path, mustWork = FALSE), call. = FALSE)
-  }
-  tryCatch(
-    readRDS(path),
-    error = function(e) {
-      stop(
-        "Failed to read ", label, ": ", normalizePath(path, mustWork = FALSE), "\n",
-        "Original error: ", conditionMessage(e),
-        call. = FALSE
-      )
-    }
-  )
-}
-
-normalise_metadata_levels <- function(seurat_obj) {
-  seurat_obj$group <- factor(seurat_obj$group, levels = group_levels)
-  seurat_obj$sample_name <- factor(seurat_obj$sample_name, levels = sample_name_levels)
-  seurat_obj$cell_type <- factor(seurat_obj$cell_type, levels = cell_type_levels)
-  seurat_obj
-}
 
 run_hallmark_scoring <- function(seurat_obj) {
   GeneSetAnalysis(seurat_obj, genesets = hall50$human)

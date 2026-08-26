@@ -1,6 +1,6 @@
 # R version 4.5.2 (2025-10-31)
 rm(list = ls())
-setwd("/data/huotong/project_tcr/2026May")
+setwd("/path/to/project")
 library(Seurat)
 library(SeuratExtend)
 library(tidyverse)
@@ -41,15 +41,41 @@ marker_colors <- c(
   "Marker" = "#D62728",
   "Effector" = "#0072B2"
 )
-vd1_marker_genes <- c(
-  "CD40LG", "CD70", "TNF", "IFNG", "GZMA", "GZMB", "GZMH",
-  "IL2RA", "CTLA4", "PDCD1", "LAG3", "HAVCR2", "TIGIT"
+vd1_marker_gene_classes <- tribble(
+  ~gene_class, ~gene, ~marker_dotplot, ~effector_score,
+  "Cytotoxicity", "NKG7", FALSE, TRUE,
+  "Cytotoxicity", "GNLY", FALSE, TRUE,
+  "Cytotoxicity", "PRF1", FALSE, TRUE,
+  "Cytotoxicity", "GZMA", TRUE, TRUE,
+  "Cytotoxicity", "GZMB", TRUE, TRUE,
+  "Cytotoxicity", "GZMH", TRUE, TRUE,
+  "Inflammatory cytokine", "IFNG", TRUE, TRUE,
+  "Inflammatory cytokine", "TNF", TRUE, TRUE,
+  "Inflammatory cytokine", "CCL3", FALSE, TRUE,
+  "Inflammatory cytokine", "CCL4", FALSE, TRUE,
+  "Costimulation activation", "CD40LG", TRUE, TRUE,
+  "Costimulation activation", "CD70", TRUE, TRUE,
+  "Costimulation activation", "IL2RA", TRUE, TRUE,
+  "Costimulation activation", "ICOS", FALSE, TRUE,
+  "Checkpoint exhaustion", "CTLA4", TRUE, FALSE,
+  "Checkpoint exhaustion", "PDCD1", TRUE, FALSE,
+  "Checkpoint exhaustion", "LAG3", TRUE, FALSE,
+  "Checkpoint exhaustion", "HAVCR2", TRUE, FALSE,
+  "Checkpoint exhaustion", "TIGIT", TRUE, FALSE,
+  "Migration NK effector", "CX3CR1", FALSE, TRUE,
+  "Migration NK effector", "KLRD1", FALSE, TRUE,
+  "Migration NK effector", "KLRG1", FALSE, TRUE
 )
-vd1_effector_activation_genes <- c(
-  "NKG7", "GNLY", "PRF1", "GZMA", "GZMB", "GZMH",
-  "IFNG", "TNF", "CCL3", "CCL4", "CD40LG", "CD70",
-  "IL2RA", "ICOS", "CX3CR1", "KLRD1", "KLRG1"
+vd1_marker_gene_classes$gene_class <- factor(
+  vd1_marker_gene_classes$gene_class,
+  levels = unique(vd1_marker_gene_classes$gene_class)
 )
+vd1_marker_genes <- vd1_marker_gene_classes %>%
+  filter(marker_dotplot) %>%
+  pull(gene)
+vd1_effector_activation_genes <- vd1_marker_gene_classes %>%
+  filter(effector_score) %>%
+  pull(gene)
 vd1_hallmark_pathways <- c(
   "HALLMARK_TNFA_SIGNALING_VIA_NFKB",
   "HALLMARK_P53_PATHWAY",
@@ -69,6 +95,7 @@ vd1_hallmark_pathways <- c(
 force_msh2 <- FALSE
 force_msh2_plot <- TRUE
 
+# Load shared palettes plus common IO, metadata, assay, and plotting helpers.
 source_plotting_shared <- function() {
   candidates <- c(
     "code/downstream/_cache_/plotting_shared.R",
@@ -86,60 +113,11 @@ source_plotting_shared()
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(table_dir, showWarnings = FALSE)
 
-read_rds_checked <- function(path, label) {
-  if (!file.exists(path)) {
-    stop(
-      "Missing ", label, ": ", normalizePath(path, mustWork = FALSE), "\n",
-      "Current working directory: ", getwd(),
-      call. = FALSE
-    )
-  }
-  if (file.info(path)$size == 0) {
-    stop("Empty ", label, ": ", normalizePath(path, mustWork = FALSE), call. = FALSE)
-  }
-  tryCatch(
-    readRDS(path),
-    error = function(e) {
-      stop(
-        "Failed to read ", label, ": ", normalizePath(path, mustWork = FALSE), "\n",
-        "Original error: ", conditionMessage(e),
-        call. = FALSE
-      )
-    }
+normalise_msh2_metadata_levels <- function(seurat_obj, annotation) {
+  list(
+    seurat = normalise_metadata_levels(seurat_obj),
+    annotation = normalise_annotation_levels(annotation)
   )
-}
-
-normalise_metadata_levels <- function(seurat_obj, annotation) {
-  seurat_obj$group <- factor(seurat_obj$group, levels = group_levels)
-  seurat_obj$sample_name <- factor(seurat_obj$sample_name, levels = sample_name_levels)
-  seurat_obj$cell_type <- factor(seurat_obj$cell_type, levels = cell_type_levels)
-
-  annotation <- annotation %>%
-    mutate(
-      group = factor(group, levels = group_levels),
-      sample_name = factor(sample_name, levels = sample_name_levels),
-      cell_type = factor(cell_type, levels = cell_type_levels)
-    )
-
-  list(seurat = seurat_obj, annotation = annotation)
-}
-
-join_assay_layers_if_needed <- function(seurat_obj, assay = DefaultAssay(seurat_obj)) {
-  assay_names <- names(seurat_obj@assays)
-  if (!assay %in% assay_names) {
-    return(seurat_obj)
-  }
-  assay_obj <- seurat_obj[[assay]]
-  assay_layers <- tryCatch(Layers(assay_obj), error = function(e) character())
-  layer_prefixes <- sub("\\..*$", "", assay_layers)
-  has_split_layers <- length(unique(assay_layers)) > length(unique(layer_prefixes))
-  has_multiple_same_type_layers <- any(table(layer_prefixes) > 1)
-
-  if (inherits(assay_obj, "Assay5") && (has_split_layers || has_multiple_same_type_layers)) {
-    message("[RUN] Joining Seurat v5 ", assay, " assay layers for MSH2 comparisons.")
-    seurat_obj <- JoinLayers(seurat_obj, assay = assay)
-  }
-  seurat_obj
 }
 
 get_marker_barcodes <- function(annotation, marker_cdr3) {
@@ -209,7 +187,7 @@ summarise_marker_cdr3g_pairs <- function(marker_pairs, marker_cdr3) {
     ))
   }
   marker_pairs %>%
-    count(CDR3g, name = "n") %>%
+    dplyr::count(CDR3g, name = "n") %>%
     arrange(desc(n), CDR3g) %>%
     mutate(
       rank = row_number(),
@@ -770,21 +748,25 @@ plot_marker_effector_gene_heatmap <- function(seurat_obj, features) {
   heatmap_data <- expression_data %>%
     pivot_longer(cols = all_of(features), names_to = "gene", values_to = "expression") %>%
     group_by(MSH2_marker_group, gene) %>%
-    summarise(mean_expression = mean(expression, na.rm = TRUE), .groups = "drop") %>%
+    dplyr::summarise(mean_expression = mean(expression, na.rm = TRUE), .groups = "drop") %>%
     group_by(gene) %>%
     mutate(scaled_expression = as.numeric(scale(mean_expression))) %>%
     ungroup() %>%
+    left_join(vd1_marker_gene_classes %>% select(gene_class, gene), by = "gene") %>%
     mutate(
       scaled_expression = ifelse(is.na(scaled_expression), 0, scaled_expression),
+      gene_class = ifelse(is.na(gene_class), "Other", as.character(gene_class)),
+      gene_class = factor(gene_class, levels = c(levels(vd1_marker_gene_classes$gene_class), "Other")),
       gene = factor(gene, levels = rev(features))
     )
 
   ggplot(heatmap_data, aes(x = MSH2_marker_group, y = gene, fill = scaled_expression)) +
     geom_tile(color = "white", linewidth = 0.4) +
+    facet_grid(gene_class ~ ., scales = "free_y", space = "free_y") +
     scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0, name = "Scaled\nmean") +
     theme_test() +
-    theme(axis.title = element_blank()) +
-    labs(title = "Effector-gene expression pattern across Vd1 marker groups")
+    theme(axis.title = element_blank(), strip.background = element_blank()) +
+    labs(title = "Grouped effector-gene expression pattern across Vd1 marker groups")
 }
 
 plot_marker_gene_dotplot <- function(seurat_obj, features) {
@@ -793,20 +775,49 @@ plot_marker_gene_dotplot <- function(seurat_obj, features) {
     message("No configured Vd1 marker genes found for MSH2 dotplot.")
     return(NULL)
   }
-  DotPlot2(seurat_obj,
-    group.by = "MSH2_marker_group",
-    features = features,
-    cols = c("lightgrey", "#B2182B"),
-    show_grid = FALSE,
-    flip = TRUE
-  ) +
-    theme(axis.title.y = element_blank())
+  expression_data <- FetchData(seurat_obj, vars = c("MSH2_marker_group", features)) %>%
+    as_tibble() %>%
+    filter(!is.na(MSH2_marker_group)) %>%
+    mutate(MSH2_marker_group = factor(as.character(MSH2_marker_group), levels = marker_levels)) %>%
+    pivot_longer(cols = all_of(features), names_to = "gene", values_to = "expression")
+  plot_data <- expression_data %>%
+    group_by(MSH2_marker_group, gene) %>%
+    dplyr::summarise(
+      mean_expression = mean(expression, na.rm = TRUE),
+      percent_expressing = mean(expression > 0, na.rm = TRUE) * 100,
+      .groups = "drop"
+    ) %>%
+    group_by(gene) %>%
+    mutate(
+      scaled_expression = as.numeric(scale(mean_expression)),
+      scaled_expression = ifelse(is.na(scaled_expression), 0, scaled_expression)
+    ) %>%
+    ungroup() %>%
+    left_join(vd1_marker_gene_classes %>% select(gene_class, gene), by = "gene") %>%
+    mutate(
+      gene_class = ifelse(is.na(gene_class), "Other", as.character(gene_class)),
+      gene_class = factor(gene_class, levels = c(levels(vd1_marker_gene_classes$gene_class), "Other")),
+      gene = factor(gene, levels = rev(vd1_marker_gene_classes$gene[vd1_marker_gene_classes$gene %in% features]))
+    )
+  ggplot(plot_data, aes(x = MSH2_marker_group, y = gene)) +
+    geom_point(aes(size = percent_expressing, color = scaled_expression), alpha = 0.9) +
+    facet_grid(gene_class ~ ., scales = "free_y", space = "free_y") +
+    scale_color_gradient2(low = "#2166AC", mid = "lightgrey", high = "#B2182B", midpoint = 0, name = "Scaled\nmean") +
+    scale_size(range = c(0.4, 4.2), name = "% expressing") +
+    theme_test() +
+    theme(
+      axis.title = element_blank(),
+      axis.text.x = element_text(angle = 35, hjust = 1),
+      strip.background = element_blank(),
+      panel.spacing.y = grid::unit(0.08, "lines")
+    ) +
+    labs(title = "Grouped Vd1 marker genes across MSH2 marker groups")
 }
 
 # 1. Read annotated cells and productive VDJ annotations.
 all_seurat_celltype <- read_rds_checked(seurat_celltype_rds, "annotated Seurat RDS")
 all_annotation_included <- read_rds_checked(included_annotation_rds, "included VDJ annotation RDS")
-normalised <- normalise_metadata_levels(all_seurat_celltype, all_annotation_included)
+normalised <- normalise_msh2_metadata_levels(all_seurat_celltype, all_annotation_included)
 all_seurat_celltype <- normalised$seurat
 all_annotation_included <- normalised$annotation
 

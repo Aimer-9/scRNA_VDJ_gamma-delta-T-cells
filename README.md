@@ -7,10 +7,15 @@ The code is organized around two stages:
 1. Cell Ranger and FASTQ preparation under `code/cellranger/`.
 2. R and shell downstream analysis under `code/downstream/`.
 
-Most downstream R scripts are written for the deployed project directory:
+Top-level helper files are grouped by purpose:
 
 ```text
-/data/huotong/project_tcr/2026May
+scripts/        Shell entry points for setup, FASTQ upload, WeCom messages, and downstream runs
+scripts/env/    Local secret/config files ignored by git
+docs/           Setup notes, review notes, and repository structure notes
+metadata/       Submission/helper metadata such as file lists and MCP tool schemas
+code/           Analysis source code and pipeline configuration
+renv/           Local R package library
 ```
 
 They call `setwd()` to that path and expect runtime folders such as `config/`, `rds/`, `figures/`, `table/`, `cache/`, and `pyscenic/` to exist there.
@@ -24,29 +29,101 @@ code/config/samples.csv
 code/config/params.yaml
 ```
 
+Prepare local runtime folders, software links, references, and R package library
+from the same params file when needed:
+
+```bash
+bash scripts/setup.sh check
+bash scripts/setup.sh all --dry-run
+bash scripts/setup.sh all
+```
+
+`setup.sh` is parameter-driven. The default setup parts are defined by
+`setup.parts` in `code/config/params.yaml`, and individual parts can be run
+without running everything:
+
+```bash
+bash scripts/setup.sh env
+bash scripts/setup.sh software
+bash scripts/setup.sh ref
+bash scripts/setup.sh r
+bash scripts/setup.sh --part software --part ref
+```
+
+The setup workflow is local/offline by design: Cell Ranger, FastQC, references,
+and R packages are installed only from paths or local archives configured in
+`params.yaml`. See `docs/setup.md` for all setup keys and examples.
+
 Link FASTQs into the project raw-data directory:
 
 ```bash
 bash code/cellranger/src/00_find_fq.sh \
   --dir /path/to/raw_fastq_root \
-  --outdir /data/huotong/project_tcr/2026May/rawdata
+  --outdir /path/to/project/rawdata
 ```
 
 Run the Cell Ranger wrapper:
 
 ```bash
-bash code/cellranger/cellranger.sh dry-run \
+bash scripts/cellranger.sh dry-run \
   --params code/config/params.yaml \
   --samples code/config/samples.csv
 
-bash code/cellranger/cellranger.sh qc \
+bash scripts/cellranger.sh qc \
   --params code/config/params.yaml \
   --samples code/config/samples.csv
 
-bash code/cellranger/cellranger.sh multi \
+bash scripts/cellranger.sh multi \
   --params code/config/params.yaml \
   --samples code/config/samples.csv
 ```
+
+Prepare FASTQs for submission with `ftp.sh` in three steps. The default output root is the current directory, so integrated FASTQs are kept under `./integrated_fastq/` and upload files are written under `./upload_tar/`:
+
+```bash
+bash scripts/ftp.sh integrate --rawdata rawdata --result . --jobs 20
+bash scripts/ftp.sh tar --rawdata rawdata --result . --jobs 20
+bash scripts/ftp.sh check --result .
+bash scripts/ftp.sh ftp --result .
+```
+
+If integration is interrupted, rerun the integrate step. `ftp.sh` removes incomplete `*.fastq.gz.tmp.*` files, checks expected integrated FASTQs in parallel, skips existing non-empty files, and rebuilds missing sample/read outputs. The tar step also checks that all expected integrated FASTQs exist before packaging.
+
+Example directory layout after integration and tar:
+
+```text
+.
++-- rawdata/
+|   +-- sample-5LIB_S7_L004_I1_001.fastq.gz
+|   +-- sample-5LIB_S7_L004_I2_001.fastq.gz
+|   +-- sample-5LIB_S7_L004_R1_001.fastq.gz
+|   +-- sample-5LIB_S7_L004_R2_001.fastq.gz
++-- integrated_fastq/
+|   +-- sample-5LIB_I1_001.fastq.gz
+|   +-- sample-5LIB_I2_001.fastq.gz
+|   +-- sample-5LIB_R1_001.fastq.gz
+|   +-- sample-5LIB_R2_001.fastq.gz
++-- upload_tar/
+    +-- sample-5LIB.tar.gz
+    +-- manifest.tsv
+```
+
+For samples that only have `R1/R2`, `scripts/ftp.sh tar` copies the integrated files to `./upload_tar/plain_pe/` by default. Add `--tar-pe` when paired-end-only samples must also be packed into `.tar.gz`.
+
+To send automatic emails after each step succeeds or fails, configure `msmtp` first. Keep account values in `scripts/env/ftp.env` or pass them through environment variables:
+
+```bash
+bash scripts/ftp.sh test-email
+bash scripts/ftp.sh ftp --result .
+```
+
+The full workflow sends one email after each completed or failed step:
+
+```bash
+bash scripts/ftp.sh all --rawdata rawdata --result . --jobs 20
+```
+
+FTP and mail credentials are loaded from `scripts/env/ftp.env` by default. Use `FTP_CONFIG=/path/to/ftp.env` or `--config /path/to/ftp.env` to use another config file. Override the recipient with `NOTIFY_EMAIL` or `--email`, and override the sender with `MAIL_FROM` or `--mail-from` when needed.
 
 Run downstream scripts in numeric order after Cell Ranger outputs are available. The downstream scripts are intended to be run from the project runtime directory or with matching deployed paths:
 
@@ -61,8 +138,25 @@ Rscript code/downstream/7_CDR3pairedSankey.R
 Rscript code/downstream/8_Vd1vs2.R
 Rscript code/downstream/9_CDR3paired.R
 Rscript code/downstream/10_MSH2.R
-Rscript code/downstream/14_Vd2_pseudotime.R
-Rscript code/downstream/15_Vd1Vd2_pairwise.R
+Rscript code/downstream/13_Vd2_pseudotime.R
+Rscript code/downstream/14_Vd1Vd2_pairwise.R
+Rscript code/downstream/15_CD80_CD86_expression.R
+Rscript code/downstream/16_Vd1Vd2_extra_visualization.R
+Rscript code/downstream/17_ZOL_PAN_effector_Vd2_comparison.R
+```
+
+To run the downstream R scripts in order and send one final email on success or failure, use:
+
+```bash
+bash scripts/run_downstream.sh
+```
+
+Each run writes to a new directory named with time and PID under `downstream_runs/`, for example `downstream_runs/20260825_142301_pid12345/`. `run_downstream.sh` copies the downstream scripts into that run directory and patches their working directory, so R outputs such as `rds/`, `figures/`, `table/`, `soupx/`, and optional `pyscenic_10k/` are created under the run directory. Logs are written under `logs/` in the same run directory, with one log file per script plus `run_summary.tsv`, `run_info.tsv`, and `run_message.txt`. On failure, the email includes the failed script, failed log path, and the last 60 log lines. Set `NOTIFY_EMAIL` and `MAIL_FROM` to enable notifications.
+
+Optional pySCENIC scripts can be included after the main R workflow:
+
+```bash
+bash scripts/run_downstream.sh --include-pyscenic
 ```
 
 Most downstream R scripts now skip existing non-empty data outputs by default. Plot and heatmap overwrite flags default to `TRUE`, so figures are refreshed when the script body runs; set the relevant `*_plot` flag to `FALSE` when you want existing figures to be kept. Major scripts such as `1_ReadData.R`, `2_DataClean.R`, and `3_cellAnnotation.R` still exit early when their final RDS outputs already exist unless their plot flag or main force flag is enabled.
@@ -79,8 +173,11 @@ To rebuild a script's outputs without manually deleting files, set that script's
 - `8_Vd1vs2.R`: `force_vd1_vs_vd2`; `force_vd1_vs_vd2_plot`
 - `9_CDR3paired.R`: `force_ranked_rds`; `force_ranked_plot`
 - `10_MSH2.R`: `force_msh2`; `force_msh2_plot`
-- `14_Vd2_pseudotime.R`: `force_vd2_pseudotime`; `force_vd2_pseudotime_plot`
-- `15_Vd1Vd2_pairwise.R`: `force_vd1_vd2_pairwise`; `force_vd1_vd2_pairwise_plot`
+- `13_Vd2_pseudotime.R`: `force_vd2_pseudotime`; `force_vd2_pseudotime_plot`
+- `14_Vd1Vd2_pairwise.R`: `force_vd1_vd2_pairwise`; `force_vd1_vd2_pairwise_plot`
+- `15_CD80_CD86_expression.R`: `force_cd80_cd86_plot`
+- `16_Vd1Vd2_extra_visualization.R`: `force_vd1_vd2_extra`; `force_vd1_vd2_extra_plot`
+- `17_ZOL_PAN_effector_Vd2_comparison.R`: `force_zol_pan_effector_vd2`; `force_zol_pan_effector_vd2_plot`
 - `12_pySCENIC_visualization.R`: `force_pyscenic_visualization` or CLI `--overwrite`; use `force_pyscenic_visualization_plot` or CLI `--overwrite-plots` for figures only
 
 `code/downstream/11_pySCENIC.sh` is the pySCENIC workflow. It selects a balanced 10,000-cell subset by `cell_type`, exports expression with sparse-aware chunks, and runs the Python pySCENIC steps through `code/downstream/_cache_/pyscenic_run.py`; use `--pyscenic-python` to run the Python part from a specific conda environment.
@@ -90,7 +187,8 @@ To rebuild a script's outputs without manually deleting files, set that script's
 Core inputs expected by the pipeline:
 
 - `config/samples.csv`: sample metadata and FASTQ prefixes.
-- `config/params.yaml`: Cell Ranger references, executable paths, output root, thread/memory settings.
+- `config/params.yaml`: Cell Ranger references, executable paths, output root, thread/memory settings, and optional local setup settings.
+- `scripts/setup.sh` and `docs/setup.md`: parameter-driven local setup for runtime folders, software links, references, and R package library preparation.
 - Cell Ranger multi outputs under the path configured in `1_ReadData.R` and `params.yaml`.
 - `code/downstream/_cache_/plotting_shared.R`: shared group/sample/cell-type levels, palettes, and plot-saving helpers.
 - Optional pySCENIC resources: TF list, cisTarget ranking databases, and motif annotation table.
@@ -131,9 +229,15 @@ Figures are written to step-specific subdirectories under `figures/`, for exampl
 
 `9_CDR3paired.R` also writes `table/trdg_clone_dispersion_metrics.csv` to describe how dispersed each exact paired TRD+TRG clone is. For each clone, the script first finds all cells with the same `TRD||TRG` pair. UMAP dispersion is calculated as the mean Euclidean distance from each clone cell to that clone's UMAP centroid, using `umap.unintegrated` when available and otherwise `umap`. Hallmark pathway dispersion is calculated from Hallmark AUCell scores: for each Hallmark pathway, the script calculates the standard deviation across cells in the clone, then averages those pathway-level standard deviations. The two raw metrics are min-max scaled across clones as `umap_mean_distance_scaled` and `hallmark_mean_pathway_sd_scaled`; `dispersion_score` is the mean of those two scaled values. Group, sample, and cell-type entropy/evenness values are saved as descriptive annotations, but they do not contribute to `dispersion_score`.
 
-`14_Vd2_pseudotime.R` runs a Monocle3 trajectory on about 5,000 Vd2 cells from exact paired TRD+TRG clones, using the same clone-ranking rules as `9_CDR3paired.R`: each selected clone must be a single-cell TRD/TRG pair and the same pair must appear in Naive, ZOL, and PAN groups. It roots pseudotime in `Effector Memory Vd2` and saves UMAP, violin, density, sample-summary, gene-expression, gene-pseudotime, and pseudotime-expression heatmap visualizations.
+`13_Vd2_pseudotime.R` runs a Monocle3 trajectory on about 5,000 Vd2 cells from exact paired TRD+TRG clones, using the same clone-ranking rules as `9_CDR3paired.R`: each selected clone must be a single-cell TRD/TRG pair and the same pair must appear in Naive, ZOL, and PAN groups. It roots pseudotime in `Effector Memory Vd2` and saves UMAP, violin, density, sample-summary, gene-expression, gene-pseudotime, and pseudotime-expression heatmap visualizations.
 
-`15_Vd1Vd2_pairwise.R` performs non-pseudotime pairwise comparisons for `Naive Vd1` versus `Effector Memory Vd2`, and `Effector Vd1` versus `PAN Effector Vd2`. It saves differential-expression tables, marker-expression summaries, UMAP highlights, volcano plots, marker dotplots, expression heatmaps, sample-level expression plots, and Hallmark AUCell delta plots.
+`14_Vd1Vd2_pairwise.R` performs non-pseudotime pairwise comparisons for `Naive Vd1` versus `Effector Memory Vd2`, and `Effector Vd1` versus `PAN Effector Vd2`. It saves differential-expression tables, marker-expression summaries, UMAP highlights, volcano plots, marker dotplots, expression heatmaps, sample-level expression plots, and Hallmark AUCell delta plots.
+
+`15_CD80_CD86_expression.R` plots CD80 and CD86 expression on fixed-coordinate UMAPs and condition-group dotplots from the final annotated Seurat object.
+
+`16_Vd1Vd2_extra_visualization.R` adds figure-first Vd1/Vd2 comparison panels: UMAP state highlights, sample-level cell fractions, curated marker dotplots and heatmaps, module-score summaries, expanded DE volcano/overlap/top-gene heatmaps, and repertoire-aware clone-size, top-CDR3, paired-clone alluvial, and paired-clone sharing heatmap outputs.
+
+`17_ZOL_PAN_effector_Vd2_comparison.R` focuses on `ZOL Effector Vd2` versus `PAN Effector Vd2`: UMAP context/density, sample-level abundance and ratio plots, curated marker and module-score summaries, DE volcano/lollipop/top-gene heatmap, Hallmark pathway delta/selected heatmap, and clone-size/top-CDR3/paired-clone repertoire views.
 
 ## Downstream Order
 
@@ -150,13 +254,14 @@ The downstream dependency chain is:
         -> 8_Vd1vs2.R
           -> 9_CDR3paired.R
           -> 10_MSH2.R
-          -> 14_Vd2_pseudotime.R
-          -> 15_Vd1Vd2_pairwise.R
+          -> 13_Vd2_pseudotime.R
+          -> 14_Vd1Vd2_pairwise.R
+          -> 15_CD80_CD86_expression.R
+          -> 16_Vd1Vd2_extra_visualization.R
+          -> 17_ZOL_PAN_effector_Vd2_comparison.R
       -> 11_pySCENIC.sh
         -> 12_pySCENIC_visualization.R
 ```
-
-There is no `6_*.R` script in the current repository.
 
 ## Cell Type Convention
 
@@ -258,7 +363,6 @@ It requires the R packages `hdf5r`, `ComplexHeatmap`, `circlize`, `Seurat`, `dpl
 
 ## Review Notes
 
-- `code/cellranger/cellranger.sh` and the config generator now point to `cellranger/src`, which is the directory present in this repository.
-- Downstream R scripts use hardcoded `setwd("/data/huotong/project_tcr/2026May")`; change this in each script or reproduce that runtime path.
+- `scripts/cellranger.sh` is the Cell Ranger entry point and uses implementation files under `code/cellranger/src`.
+- Downstream R scripts use hardcoded `setwd("/path/to/project")`; change this in each script or reproduce that runtime path.
 - Downstream R scripts source `code/downstream/_cache_/plotting_shared.R` with fallbacks for `_cache_/plotting_shared.R` and `cache/plotting_shared.R`.
-- `code/config/params_reference.md` describes more keys than are currently present in `code/config/params.yaml`; treat it as a broader reference, not a guarantee that every key is active in this code snapshot.

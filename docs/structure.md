@@ -7,18 +7,31 @@ This document reviews every script under `code/` and describes how the pipeline 
 ```text
 .
 |-- README.md
-|-- structure.md
 |-- code/
 |   |-- run.md
 |   |-- config/
 |   |-- cellranger/
 |   `-- downstream/
+|-- docs/
+|   |-- setup.md
+|   |-- structure.md
+|   `-- review.txt
+|-- metadata/
+|   |-- files.txt
+|   `-- tools.json
+|-- scripts/
+|   |-- cellranger.sh
+|   |-- setup.sh
+|   |-- ftp.sh
+|   |-- run_downstream.sh
+|   |-- wecom_mcp.sh
+|   `-- env/
 |-- figures/
 |-- table/
 `-- manuscript/
 ```
 
-`figures/` and `table/` contain generated outputs. Downstream R scripts write figures under step-specific subdirectories such as `figures/5_CDR3stat/`. The main runtime object directory, `rds/`, is expected by the scripts but is not present in this repository snapshot.
+`scripts/env/` contains local account and credential files and is ignored by git. `metadata/` contains helper file lists and MCP tool schema exports. `figures/` and `table/` contain generated outputs. Downstream R scripts write figures under step-specific subdirectories such as `figures/5_CDR3stat/`. The main runtime object directory, `rds/`, is expected by the scripts but is not present in this repository snapshot.
 
 ## `code/config`
 
@@ -29,9 +42,9 @@ This document reviews every script under `code/` and describes how the pipeline 
 | `code/config/inner-enrichment-primers.txt` | Primer list for VDJ-T-GD Cell Ranger multi configs. |
 | `code/config/params_reference.md` | Broader parameter dictionary. It includes keys not used by the current scripts. |
 
-## `code/cellranger`
+## `scripts/cellranger.sh` And `code/cellranger`
 
-### `cellranger.sh`
+### `scripts/cellranger.sh`
 
 Wrapper for the Cell Ranger preparation workflow.
 
@@ -146,8 +159,8 @@ Most downstream R scripts skip existing non-empty data outputs by default. Plot 
 - `8_Vd1vs2.R`: `force_vd1_vs_vd2`; `force_vd1_vs_vd2_plot`
 - `9_CDR3paired.R`: `force_ranked_rds`; `force_ranked_plot`
 - `10_MSH2.R`: `force_msh2`; `force_msh2_plot`
-- `14_Vd2_pseudotime.R`: `force_vd2_pseudotime`; `force_vd2_pseudotime_plot`
-- `15_Vd1Vd2_pairwise.R`: `force_vd1_vd2_pairwise`; `force_vd1_vd2_pairwise_plot`
+- `13_Vd2_pseudotime.R`: `force_vd2_pseudotime`; `force_vd2_pseudotime_plot`
+- `14_Vd1Vd2_pairwise.R`: `force_vd1_vd2_pairwise`; `force_vd1_vd2_pairwise_plot`
 - `12_pySCENIC_visualization.R`: `force_pyscenic_visualization` or CLI `--overwrite`; `force_pyscenic_visualization_plot` or CLI `--overwrite-plots`
 
 The `*_plot` flags overwrite figure files without forcing RDS/CSV data outputs. These plot flags now default to `TRUE`. For `1_ReadData.R` and `2_DataClean.R`, some diagnostic plots depend on raw intermediate objects that are not cached separately, so the script body still has to run; data outputs are not overwritten unless the main force flag is also `TRUE`.
@@ -423,7 +436,7 @@ Outputs:
 - `table/msh2_marker_hallmark_delta.csv`
 - `figures/10_MSH2/msh2_marker_*`
 
-### `downstream/14_Vd2_pseudotime.R`
+### `downstream/13_Vd2_pseudotime.R`
 
 Runs Monocle3 pseudotime over about 5,000 Vd2 cells from exact paired TRD+TRG clones, then summarizes the major Vd2 memory-to-effector states: `Effector Memory Vd2`, `Pre-activated Vd2`, `ZOL Effector Vd2`, `ZOL FOXP3+ Vd2`, and `PAN Effector Vd2`.
 
@@ -457,19 +470,19 @@ Outputs:
 - `table/vd2_state_gene_expression_summary.csv`
 - `table/vd2_state_gene_expression_by_sample.csv`
 - `table/vd2_state_pseudotime_gene_correlation.csv`
-- `figures/14_Vd2_pseudotime/vd2_state_pseudotime_umap.png/pdf`
-- `figures/14_Vd2_pseudotime/vd2_state_celltype_umap.png/pdf`
-- `figures/14_Vd2_pseudotime/vd2_state_group_umap.png/pdf`
-- `figures/14_Vd2_pseudotime/vd2_state_pseudotime_violin.png/pdf`
-- `figures/14_Vd2_pseudotime/vd2_state_pseudotime_by_sample.png/pdf`
-- `figures/14_Vd2_pseudotime/vd2_state_pseudotime_density.png/pdf`
-- `figures/14_Vd2_pseudotime/vd2_state_gene_pseudotime_trends.png/pdf`
-- `figures/14_Vd2_pseudotime/vd2_state_gene_expression_heatmap.png/pdf`
-- `figures/14_Vd2_pseudotime/vd2_state_gene_expression_by_sample.png/pdf`
-- `figures/14_Vd2_pseudotime/vd2_state_pseudotime_gene_correlation.png/pdf`
-- `figures/14_Vd2_pseudotime/vd2_state_pseudotime_expression_heatmap.png/pdf`
+- `figures/13_Vd2_pseudotime/vd2_state_pseudotime_umap.png/pdf`
+- `figures/13_Vd2_pseudotime/vd2_state_celltype_umap.png/pdf`
+- `figures/13_Vd2_pseudotime/vd2_state_group_umap.png/pdf`
+- `figures/13_Vd2_pseudotime/vd2_state_pseudotime_violin.png/pdf`
+- `figures/13_Vd2_pseudotime/vd2_state_pseudotime_by_sample.png/pdf`
+- `figures/13_Vd2_pseudotime/vd2_state_pseudotime_density.png/pdf`
+- `figures/13_Vd2_pseudotime/vd2_state_gene_pseudotime_trends.png/pdf`
+- `figures/13_Vd2_pseudotime/vd2_state_gene_expression_heatmap.png/pdf`
+- `figures/13_Vd2_pseudotime/vd2_state_gene_expression_by_sample.png/pdf`
+- `figures/13_Vd2_pseudotime/vd2_state_pseudotime_gene_correlation.png/pdf`
+- `figures/13_Vd2_pseudotime/vd2_state_pseudotime_expression_heatmap.png/pdf`
 
-### `downstream/15_Vd1Vd2_pairwise.R`
+### `downstream/14_Vd1Vd2_pairwise.R`
 
 Performs focused non-pseudotime comparisons between selected Vd1 and Vd2 states:
 
@@ -497,12 +510,12 @@ Outputs:
 - `table/vd1_vd2_pairwise_gene_expression_by_sample.csv`
 - `table/vd1_vd2_pairwise_hallmark_delta.csv`
 - `table/vd1_vd2_pairwise_hallmark_celltype_stats.csv`
-- `figures/15_Vd1Vd2_pairwise/vd1_vd2_pairwise_umap_highlight.png/pdf`
-- `figures/15_Vd1Vd2_pairwise/vd1_vd2_pairwise_marker_dotplot.png/pdf`
-- `figures/15_Vd1Vd2_pairwise/vd1_vd2_pairwise_gene_expression_heatmap.png/pdf`
-- `figures/15_Vd1Vd2_pairwise/vd1_vd2_pairwise_gene_expression_by_sample.png/pdf`
-- `figures/15_Vd1Vd2_pairwise/volcano_*.png/pdf`
-- `figures/15_Vd1Vd2_pairwise/hallmark_delta_*.png/pdf`
+- `figures/14_Vd1Vd2_pairwise/vd1_vd2_pairwise_umap_highlight.png/pdf`
+- `figures/14_Vd1Vd2_pairwise/vd1_vd2_pairwise_marker_dotplot.png/pdf`
+- `figures/14_Vd1Vd2_pairwise/vd1_vd2_pairwise_gene_expression_heatmap.png/pdf`
+- `figures/14_Vd1Vd2_pairwise/vd1_vd2_pairwise_gene_expression_by_sample.png/pdf`
+- `figures/14_Vd1Vd2_pairwise/volcano_*.png/pdf`
+- `figures/14_Vd1Vd2_pairwise/hallmark_delta_*.png/pdf`
 
 ### `downstream/11_pySCENIC.sh`
 
@@ -593,7 +606,7 @@ Outputs:
 
 ## Review Findings
 
-1. Runtime path assumptions are hardcoded in downstream R scripts through `setwd("/data/huotong/project_tcr/2026May")`. This is fine for the deployed machine but makes local reuse brittle.
+1. Runtime path assumptions are hardcoded in downstream R scripts through `setwd("/path/to/project")`. This is fine for the deployed machine but makes local reuse brittle.
 2. Downstream R scripts now source `code/downstream/_cache_/plotting_shared.R` with fallbacks for `_cache_/plotting_shared.R` and `cache/plotting_shared.R`.
 3. `code/config/params_reference.md` is broader than the current `params.yaml` and mentions analysis sections not consumed by the visible scripts.
 4. The scripts are order-dependent and communicate mainly through RDS files in `rds/`; rerunning a middle step requires checking that upstream RDS files match the current annotation and palette conventions.

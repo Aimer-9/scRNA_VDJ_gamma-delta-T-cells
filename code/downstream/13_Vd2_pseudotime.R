@@ -1,6 +1,6 @@
 # R version 4.5.2 (2025-10-31)
 rm(list = ls())
-setwd("/data/huotong/project_tcr/2026May")
+setwd("/path/to/project")
 library(Seurat)
 library(SeuratExtend)
 library(SeuratWrappers)
@@ -14,7 +14,7 @@ options(
 )
 
 rds_dir <- "rds"
-figure_dir <- file.path("figures", "14_Vd2_pseudotime")
+figure_dir <- file.path("figures", "13_Vd2_pseudotime")
 table_dir <- "table"
 
 seurat_celltype_rds <- file.path(rds_dir, "all_seurat_celltype.rds")
@@ -49,6 +49,7 @@ marker_gene_panel <- c(
 force_vd2_pseudotime <- FALSE
 force_vd2_pseudotime_plot <- TRUE
 
+# Load shared palettes plus common IO, metadata, assay, and plotting helpers.
 source_plotting_shared <- function() {
   candidates <- c(
     "code/downstream/_cache_/plotting_shared.R",
@@ -65,57 +66,6 @@ source_plotting_shared()
 
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(table_dir, showWarnings = FALSE)
-
-read_rds_checked <- function(path, label) {
-  if (!file.exists(path)) {
-    stop("Missing ", label, ": ", normalizePath(path, mustWork = FALSE), call. = FALSE)
-  }
-  if (file.info(path)$size == 0) {
-    stop("Empty ", label, ": ", normalizePath(path, mustWork = FALSE), call. = FALSE)
-  }
-  readRDS(path)
-}
-
-normalise_metadata_levels <- function(seurat_obj) {
-  seurat_obj$group <- factor(seurat_obj$group, levels = group_levels)
-  seurat_obj$sample_name <- factor(seurat_obj$sample_name, levels = sample_name_levels)
-  seurat_obj$cell_type <- factor(seurat_obj$cell_type, levels = cell_type_levels)
-  seurat_obj
-}
-
-normalise_paired_metadata_levels <- function(paired_cdr3) {
-  paired_cdr3 %>%
-    mutate(
-      group = factor(group, levels = group_levels),
-      sample_name = factor(sample_name, levels = sample_name_levels),
-      cell_type = factor(cell_type, levels = cell_type_levels)
-    )
-}
-
-get_assay_names <- function(seurat_obj) {
-  assay_names <- names(seurat_obj@assays)
-  if (is.null(assay_names)) {
-    assay_names <- character()
-  }
-  as.character(assay_names)
-}
-
-get_reduction_names <- function(seurat_obj) {
-  reduction_names <- names(seurat_obj@reductions)
-  if (is.null(reduction_names)) {
-    reduction_names <- character()
-  }
-  as.character(reduction_names)
-}
-
-join_assay_layers_if_needed <- function(seurat_obj, assay = DefaultAssay(seurat_obj)) {
-  assay_obj <- seurat_obj[[assay]]
-  if (inherits(assay_obj, "Assay5") && length(SeuratObject::Layers(assay_obj)) > 1) {
-    message("Joining Seurat v5 assay layers for assay: ", assay)
-    seurat_obj[[assay]] <- JoinLayers(assay_obj)
-  }
-  seurat_obj
-}
 
 get_single_pair_records <- function(paired_cdr3) {
   single_barcodes <- paired_cdr3 %>%
@@ -744,7 +694,7 @@ all_seurat_celltype <- read_rds_checked(seurat_celltype_rds, "annotated Seurat R
 all_seurat_celltype <- normalise_metadata_levels(all_seurat_celltype)
 
 barcode_trgd_paired <- read_rds_checked(paired_cdr3_rds, "paired TRD/TRG CDR3 RDS") %>%
-  normalise_paired_metadata_levels()
+  normalise_annotation_levels()
 barcode_paired_single_all <- get_single_pair_records(barcode_trgd_paired)
 barcode_paired_ranked <- rank_paired_clones(barcode_paired_single_all)
 pair_rank_metadata <- read_or_make_pair_rank_metadata(barcode_paired_ranked)

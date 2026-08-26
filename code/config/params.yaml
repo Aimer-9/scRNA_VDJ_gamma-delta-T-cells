@@ -1,10 +1,24 @@
-outdir: "/data/huotong/project_tcr/2026May/output"
+outdir: "/path/to/project/output"
 cellranger:
-  reference_gex: "/data/huotong/Reference/cellranger/gex/refdata-gex-GRCh38-2024-A"
-  reference_vdj: "/data/huotong/Reference/cellranger/vdj/refdata-cellranger-vdj-GRCh38-alts-ensembl-7.1.0"
-  cellranger_path: "/data/huotong/Software/cellranger-9.0.1/cellranger"
-  fastqc_path: "/data/huotong/Software/FastQC/fastqc"
+  reference_gex: "/path/to/refdata-gex-GRCh38-2024-A"
+  reference_vdj: "/path/to/refdata-cellranger-vdj-GRCh38-alts-ensembl-7.1.0"
+  cellranger_path: "/path/to/cellranger"
+  fastqc_path: "/path/to/fastqc"
   fastqc_threads: 20
-  inner_enrichment_primers: "/data/huotong/MyCode/SingleCell_VDJ/example/config/inner-enrichment-primers.txt"
+  inner_enrichment_primers: "/path/to/inner-enrichment-primers.txt"
   localcores: 16
   localmem: 64
+setup:
+  parts: ["env", "software", "ref", "r"]
+  project_dir: "/path/to/project"
+  software_dir: "/path/to/software"
+  reference_dir: "/path/to/reference/cellranger"
+  bin_dir: "tools/bin"
+  conda_env_prefix: ""
+  conda_env_yaml: ""
+  r_lib: "renv/library"
+  r_package_source_dir: ""
+  cellranger_archive: ""
+  fastqc_archive: ""
+  gex_reference_archive: ""
+  vdj_reference_archive: ""
