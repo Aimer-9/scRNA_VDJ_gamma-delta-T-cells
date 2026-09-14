@@ -31,6 +31,18 @@ This document reviews every script under `code/` and describes how the pipeline 
 `-- manuscript/
 ```
 
+## Dependency-Tracked Pipeline
+
+`code/pipeline/_targets.R` is the new downstream dependency graph. It first
+validates the merged configuration and sample manifest, then records one
+compatibility target per numbered R stage. The target layer invokes a prepared
+copy of the legacy script with configured project and Cell Ranger paths, and
+checks its established output artifacts. This keeps current output contracts
+stable while analysis functions are extracted into `code/pipeline/R/`.
+
+`code/config/analysis.yaml` owns downstream-only settings such as the project
+root, Cell Ranger output, exclusions, seed, and artifact directories.
+
 `scripts/env/` contains local account and credential files and is ignored by git. `metadata/` contains helper file lists and MCP tool schema exports. `figures/` and `table/` contain generated outputs. Downstream R scripts write figures under step-specific subdirectories such as `figures/5_CDR3stat/`. The main runtime object directory, `rds/`, is expected by the scripts but is not present in this repository snapshot.
 
 ## `code/config`

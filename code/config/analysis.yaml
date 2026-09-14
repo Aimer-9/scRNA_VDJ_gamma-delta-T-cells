@@ -1,0 +1,15 @@
+# Study-specific downstream settings. Paths are resolved relative to the project
+# root unless they are absolute.
+project_dir: "."
+cellranger_output: ""
+excluded_sample_ids:
+  - "Blank-2"
+seed: 1234
+
+# Legacy artifact paths remain the public contract during the targets migration.
+artifacts:
+  rds_dir: "rds"
+  table_dir: "table"
+  figure_dir: "figures"
+  soupx_dir: "soupx"
+  pyscenic_dir: "pyscenic_10k"

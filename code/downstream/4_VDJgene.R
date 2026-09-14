@@ -23,7 +23,8 @@ included_annotation_rds <- file.path(rds_dir, "all_annotation_included.rds")
 
 source_plotting_shared <- function() {
   candidates <- c(
-    "code/downstream/_cache_/plotting_shared.R",
+    "code/downstream/lib/plotting_shared.R",
+    "lib/plotting_shared.R",
     "_cache_/plotting_shared.R",
     "cache/plotting_shared.R"
   )

@@ -106,9 +106,9 @@ RANKING_DBS="${RANKING_DBS:-}"
 MOTIF_ANNOTATIONS="${MOTIF_ANNOTATIONS:-}"
 PYSCENIC_PYTHON="${PYSCENIC_PYTHON:-python3}"
 PYSCENIC_CMD="${PYSCENIC_CMD:-pyscenic}"
-SELECT_CELLS_R="${SELECT_CELLS_R:-code/downstream/_cache_/pyscenic_select_cells.R}"
-EXPORT_R="${EXPORT_R:-code/downstream/_cache_/pyscenic_export.R}"
-PYSCENIC_RUN_PY="${PYSCENIC_RUN_PY:-code/downstream/_cache_/pyscenic_run.py}"
+SELECT_CELLS_R="${SELECT_CELLS_R:-code/downstream/lib/pyscenic_select_cells.R}"
+EXPORT_R="${EXPORT_R:-code/downstream/lib/pyscenic_export.R}"
+PYSCENIC_RUN_PY="${PYSCENIC_RUN_PY:-code/downstream/lib/pyscenic_run.py}"
 
 RANKING_DB_ARGS=()
 
@@ -352,6 +352,18 @@ if [[ -z "$MOTIF_ANNOTATIONS" ]]; then
 fi
 
 # All relative input and output paths below are interpreted from PROJECT_DIR.
+case "$PROJECT_DIR" in
+  /*) ;;
+  *) PROJECT_DIR="$(pwd)/$PROJECT_DIR" ;;
+esac
+case "$OUT_DIR" in
+  /*) ;;
+  *) OUT_DIR="$PROJECT_DIR/$OUT_DIR" ;;
+esac
+case "$LOG_DIR" in
+  ""|/*) ;;
+  *) LOG_DIR="$PROJECT_DIR/$LOG_DIR" ;;
+esac
 cd "$PROJECT_DIR"
 mkdir -p "$OUT_DIR"
 if [[ -z "$LOG_DIR" ]]; then

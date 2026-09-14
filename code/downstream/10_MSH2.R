@@ -30,6 +30,7 @@ centroid_distance_table <- file.path(table_dir, "msh2_marker_umap_centroid_dista
 centroid_distance_summary_table <- file.path(table_dir, "msh2_marker_umap_centroid_distance_summary.csv")
 de_marker_table <- file.path(table_dir, "msh2_marker_de_markers.csv")
 cdr3g_pair_summary_table <- file.path(table_dir, "msh2_marker_cdr3g_to_caldttfpigdrgytdklif_top10.csv")
+cdr3d_pair_summary_table <- file.path(table_dir, "msh2_marker_top_cdr3g_to_cdr3d_top10.csv")
 
 msh2_marker_cdr3 <- "CALDTTFPIGDRGYTDKLIF"
 top_msh2_cdr3g_n <- 10
@@ -98,7 +99,8 @@ force_msh2_plot <- TRUE
 # Load shared palettes plus common IO, metadata, assay, and plotting helpers.
 source_plotting_shared <- function() {
   candidates <- c(
-    "code/downstream/_cache_/plotting_shared.R",
+    "code/downstream/lib/plotting_shared.R",
+    "lib/plotting_shared.R",
     "_cache_/plotting_shared.R",
     "cache/plotting_shared.R"
   )
@@ -197,6 +199,43 @@ summarise_marker_cdr3g_pairs <- function(marker_pairs, marker_cdr3) {
     select(rank, CDR3g, CDR3d, n, percent)
 }
 
+spread_sankey_label_positions <- function(label_y, total, min_gap = NULL, pad = NULL) {
+  if (length(label_y) <= 1 || total <= 0) {
+    return(label_y)
+  }
+  if (is.null(min_gap)) {
+    min_gap <- max(total * 0.045, 0.8)
+  }
+  if (is.null(pad)) {
+    pad <- min(total * 0.04, 1)
+  }
+  lower <- pad
+  upper <- total - pad
+  if ((length(label_y) - 1) * min_gap > (upper - lower)) {
+    return(seq(from = upper, to = lower, length.out = length(label_y))[rank(-label_y, ties.method = "first")])
+  }
+
+  ord <- order(label_y)
+  y <- label_y[ord]
+  for (i in seq_along(y)[-1]) {
+    y[i] <- max(y[i], y[i - 1] + min_gap)
+  }
+  overflow <- max(y) - upper
+  if (overflow > 0) {
+    y <- y - overflow
+  }
+  for (i in rev(seq_along(y)[-length(y)])) {
+    y[i] <- min(y[i], y[i + 1] - min_gap)
+  }
+  underflow <- lower - min(y)
+  if (underflow > 0) {
+    y <- y + underflow
+  }
+  out <- numeric(length(label_y))
+  out[ord] <- y
+  out
+}
+
 plot_marker_cdr3g_sankey <- function(marker_cdr3g_summary, top_n = 10) {
   if (nrow(marker_cdr3g_summary) == 0) {
     return(NULL)
@@ -226,15 +265,7 @@ plot_marker_cdr3g_sankey <- function(marker_cdr3g_summary, top_n = 10) {
     )
 
   label_data <- plot_counts %>%
-    mutate(label_plot_y = label_y)
-  small_label_rows <- which(label_data$n <= 3 & as.character(label_data$CDR3g_plot) != "Other CDR3g")
-  if (length(small_label_rows) > 0) {
-    label_data$label_plot_y[small_label_rows] <- seq(
-      from = sum(plot_counts$n) * 0.90,
-      to = sum(plot_counts$n) * 0.50,
-      length.out = length(small_label_rows)
-    )
-  }
+    mutate(label_plot_y = spread_sankey_label_positions(label_y, sum(plot_counts$n)))
 
   smoothstep <- function(x) {
     3 * x^2 - 2 * x^3
@@ -295,13 +326,13 @@ plot_marker_cdr3g_sankey <- function(marker_cdr3g_summary, top_n = 10) {
     ) +
     geom_segment(
       data = label_data,
-      aes(x = -0.05, xend = -0.19, y = label_y, yend = label_plot_y),
+      aes(x = -0.05, xend = -0.32, y = label_y, yend = label_plot_y),
       linewidth = 0.25,
       color = "grey55"
     ) +
     geom_text(
       data = label_data,
-      aes(x = -0.21, y = label_plot_y, label = label),
+      aes(x = -0.34, y = label_plot_y, label = label),
       hjust = 1,
       size = 2.35,
       lineheight = 0.9
@@ -316,7 +347,7 @@ plot_marker_cdr3g_sankey <- function(marker_cdr3g_summary, top_n = 10) {
     annotate("text", x = 0, y = sum(plot_counts$n) * 1.04, label = "CDR3g", fontface = "bold", size = 4) +
     annotate("text", x = 1, y = sum(plot_counts$n) * 1.04, label = "CDR3d", fontface = "bold", size = 4) +
     scale_fill_manual(values = fill_values, drop = FALSE) +
-    scale_x_continuous(limits = c(-0.78, 1.78), expand = expansion(mult = c(0.01, 0.01))) +
+    scale_x_continuous(limits = c(-1.05, 1.78), expand = expansion(mult = c(0.01, 0.01))) +
     scale_y_continuous(expand = expansion(mult = c(0.01, 0.08))) +
     labs(
       title = "Paired CDR3g sequences to dominant MSH2 CDR3d",
@@ -330,6 +361,234 @@ plot_marker_cdr3g_sankey <- function(marker_cdr3g_summary, top_n = 10) {
       plot.title = element_text(face = "bold", hjust = 0.5, margin = margin(b = 4)),
       plot.subtitle = element_text(hjust = 0.5, color = "grey30", margin = margin(b = 10)),
       plot.margin = margin(12, 18, 12, 18)
+    )
+}
+
+summarise_top_cdr3g_cdr3d_pairs <- function(annotation, marker_cdr3g_summary, top_n = 10) {
+  if (nrow(marker_cdr3g_summary) == 0) {
+    return(tibble(
+      rank = integer(),
+      CDR3g = character(),
+      CDR3d = character(),
+      n = integer(),
+      percent = numeric()
+    ))
+  }
+  top_cdr3g <- marker_cdr3g_summary %>%
+    arrange(rank) %>%
+    slice_head(n = 1) %>%
+    pull(CDR3g)
+
+  pair_records <- annotation %>%
+    filter(chain %in% c("TRD", "TRG"), !is.na(cdr3), cdr3 != "") %>%
+    distinct(barcode, chain, cdr3) %>%
+    pivot_wider(names_from = chain, values_from = cdr3, values_fn = list) %>%
+    split(.$barcode) %>%
+    lapply(function(record) {
+      trd <- unlist(record$TRD)
+      trg <- unlist(record$TRG)
+      if (length(trd) == 0 || length(trg) == 0 || !top_cdr3g %in% trg) {
+        return(NULL)
+      }
+      tibble(
+        barcode = unique(record$barcode),
+        CDR3g = top_cdr3g,
+        CDR3d = trd
+      )
+    }) %>%
+    bind_rows()
+
+  if (nrow(pair_records) == 0) {
+    return(tibble(
+      rank = integer(),
+      CDR3g = character(),
+      CDR3d = character(),
+      n = integer(),
+      percent = numeric()
+    ))
+  }
+
+  pair_records %>%
+    distinct(barcode, CDR3g, CDR3d) %>%
+    dplyr::count(CDR3g, CDR3d, name = "n") %>%
+    arrange(desc(n), CDR3d) %>%
+    mutate(
+      rank = row_number(),
+      percent = n / sum(n) * 100
+    ) %>%
+    slice_head(n = top_n)
+}
+
+plot_top_cdr3g_to_cdr3d_sankey <- function(top_cdr3g_cdr3d_summary, marker_cdr3, top_n = 10) {
+  if (nrow(top_cdr3g_cdr3d_summary) == 0) {
+    return(NULL)
+  }
+  source_cdr3g <- unique(top_cdr3g_cdr3d_summary$CDR3g)
+  plot_counts <- top_cdr3g_cdr3d_summary %>%
+    mutate(
+      CDR3d_plot = if_else(rank <= top_n, CDR3d, "Other CDR3d"),
+      CDR3d_plot = factor(CDR3d_plot, levels = unique(CDR3d_plot))
+    ) %>%
+    group_by(CDR3d_plot) %>%
+    summarise(n = sum(n), .groups = "drop") %>%
+    mutate(
+      percent = n / sum(n) * 100,
+      left_ymin = lag(cumsum(n), default = 0),
+      left_ymax = cumsum(n),
+      right_ymin = left_ymin,
+      right_ymax = left_ymax,
+      label_y = (right_ymin + right_ymax) / 2,
+      label = sprintf("%s\nn=%d (%.1f%%)", as.character(CDR3d_plot), n, percent),
+      is_marker_cdr3 = as.character(CDR3d_plot) == marker_cdr3
+    )
+
+  label_data <- plot_counts %>%
+    mutate(label_plot_y = spread_sankey_label_positions(label_y, sum(plot_counts$n)))
+  smoothstep <- function(x) {
+    3 * x^2 - 2 * x^3
+  }
+  make_ribbon <- function(row, steps = 80) {
+    x <- seq(0, 1, length.out = steps)
+    s <- smoothstep(x)
+    upper <- tibble(x = x, y = (1 - s) * row$left_ymax + s * row$right_ymax)
+    lower <- tibble(x = rev(x), y = rev((1 - s) * row$left_ymin + s * row$right_ymin))
+    bind_rows(upper, lower) %>%
+      mutate(CDR3d_plot = row$CDR3d_plot)
+  }
+  ribbon_data <- bind_rows(lapply(seq_len(nrow(plot_counts)), function(i) make_ribbon(plot_counts[i, ])))
+  node_width <- 0.045
+  left_node <- tibble(
+    xmin = -node_width,
+    xmax = node_width,
+    ymin = 0,
+    ymax = sum(plot_counts$n),
+    label_y = sum(plot_counts$n) / 2,
+    label = sprintf("%s\nn=%d", source_cdr3g, sum(plot_counts$n))
+  )
+  right_nodes <- plot_counts %>%
+    transmute(
+      xmin = 1 - node_width,
+      xmax = 1 + node_width,
+      ymin = right_ymin,
+      ymax = right_ymax,
+      CDR3d_plot,
+      is_marker_cdr3
+    )
+  fill_values <- c(
+    "#4E79A7", "#F28E2B", "#59A14F", "#E15759", "#76B7B2",
+    "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC",
+    "grey80"
+  )
+  names(fill_values) <- levels(plot_counts$CDR3d_plot)
+
+  ggplot() +
+    geom_polygon(
+      data = ribbon_data,
+      aes(x = x, y = y, group = CDR3d_plot, fill = CDR3d_plot),
+      alpha = 0.72,
+      color = NA
+    ) +
+    geom_rect(
+      data = left_node,
+      aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+      fill = "#3B3B3B",
+      color = "white",
+      linewidth = 0.35
+    ) +
+    geom_rect(
+      data = right_nodes,
+      aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = CDR3d_plot),
+      color = "white",
+      linewidth = 0.35
+    ) +
+    geom_segment(
+      data = label_data,
+      aes(x = 1.05, xend = 1.32, y = label_y, yend = label_plot_y),
+      linewidth = 0.25,
+      color = "grey55"
+    ) +
+    geom_text(
+      data = label_data,
+      aes(x = 1.34, y = label_plot_y, label = label, fontface = if_else(is_marker_cdr3, "bold", "plain")),
+      hjust = 0,
+      size = 2.35,
+      lineheight = 0.9
+    ) +
+    geom_text(
+      data = left_node,
+      aes(x = -0.08, y = label_y, label = label),
+      hjust = 1,
+      size = 3.2,
+      lineheight = 0.9
+    ) +
+    annotate("text", x = 0, y = sum(plot_counts$n) * 1.04, label = "CDR3g", fontface = "bold", size = 4) +
+    annotate("text", x = 1, y = sum(plot_counts$n) * 1.04, label = "CDR3d", fontface = "bold", size = 4) +
+    scale_fill_manual(values = fill_values, drop = FALSE) +
+    scale_x_continuous(limits = c(-0.78, 2.05), expand = expansion(mult = c(0.01, 0.01))) +
+    scale_y_continuous(expand = expansion(mult = c(0.01, 0.08))) +
+    labs(
+      title = "CDR3d sequences paired with the top MSH2-associated CDR3g",
+      subtitle = sprintf("Top %d CDR3d partners of %s; %s is highlighted", top_n, source_cdr3g, marker_cdr3)
+    ) +
+    theme_void(base_size = 11) +
+    theme(
+      plot.background = element_rect(fill = "white", color = NA),
+      panel.background = element_rect(fill = "white", color = NA),
+      legend.position = "none",
+      plot.title = element_text(face = "bold", hjust = 0.5, margin = margin(b = 4)),
+      plot.subtitle = element_text(hjust = 0.5, color = "grey30", margin = margin(b = 10)),
+      plot.margin = margin(12, 18, 12, 18)
+    )
+}
+
+plot_combined_marker_pair_sankey <- function(marker_cdr3g_summary, top_cdr3g_cdr3d_summary, marker_cdr3, top_n = 10) {
+  left_plot <- plot_marker_cdr3g_sankey(marker_cdr3g_summary, top_n = top_n)
+  right_plot <- plot_top_cdr3g_to_cdr3d_sankey(top_cdr3g_cdr3d_summary, marker_cdr3 = marker_cdr3, top_n = top_n)
+  if (is.null(left_plot) || is.null(right_plot)) {
+    return(NULL)
+  }
+
+  top_cdr3g <- marker_cdr3g_summary %>%
+    arrange(rank) %>%
+    slice_head(n = 1) %>%
+    pull(CDR3g)
+  top_pair <- marker_cdr3g_summary %>%
+    filter(CDR3g == top_cdr3g) %>%
+    slice_head(n = 1)
+
+  left_plot <- left_plot +
+    labs(title = NULL, subtitle = NULL) +
+    theme(
+      plot.title = element_blank(),
+      plot.subtitle = element_blank(),
+      plot.margin = margin(8, 8, 8, 8)
+    )
+  right_plot <- right_plot +
+    labs(title = NULL, subtitle = NULL) +
+    theme(
+      plot.title = element_blank(),
+      plot.subtitle = element_blank(),
+      plot.margin = margin(8, 8, 8, 8)
+    )
+
+  subtitle <- sprintf(
+    "Left: CDR3g partners of %s. Right: CDR3d partners of the dominant CDR3g %s. Dominant pair: n=%d (%.1f%%).",
+    marker_cdr3,
+    top_cdr3g,
+    top_pair$n,
+    top_pair$percent
+  )
+
+  left_plot + right_plot +
+    plot_layout(widths = c(1, 1), guides = "collect") +
+    plot_annotation(
+      title = "MSH2-associated gamma-delta CDR3 pairing",
+      subtitle = subtitle
+    ) &
+    theme(
+      plot.background = element_rect(fill = "white", color = NA),
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 15, margin = margin(b = 4)),
+      plot.subtitle = element_text(hjust = 0.5, color = "grey30", size = 10, margin = margin(b = 8))
     )
 }
 
@@ -842,12 +1101,58 @@ if (!is.null(marker_cdr3g_sankey)) {
   save_plot(
     marker_cdr3g_sankey,
     "msh2_marker_cdr3g_to_caldttfpigdrgytdklif_top10_sankey",
-    10,
+    12,
     8,
     overwrite = force_msh2_plot
   )
 } else {
   message("[SKIP] No paired CDR3g records available for MSH2 marker Sankey.")
+}
+
+top_cdr3g_cdr3d_summary <- summarise_top_cdr3g_cdr3d_pairs(
+  all_annotation_included,
+  marker_cdr3g_summary,
+  top_n = top_msh2_cdr3g_n
+)
+write_csv_if_missing(
+  top_cdr3g_cdr3d_summary,
+  cdr3d_pair_summary_table,
+  "MSH2 marker top CDR3g paired CDR3d summary table",
+  overwrite = force_msh2
+)
+top_cdr3g_cdr3d_sankey <- plot_top_cdr3g_to_cdr3d_sankey(
+  top_cdr3g_cdr3d_summary,
+  marker_cdr3 = msh2_marker_cdr3,
+  top_n = top_msh2_cdr3g_n
+)
+if (!is.null(top_cdr3g_cdr3d_sankey)) {
+  save_plot(
+    top_cdr3g_cdr3d_sankey,
+    "msh2_marker_top_cdr3g_to_cdr3d_top10_sankey",
+    12,
+    8,
+    overwrite = force_msh2_plot
+  )
+} else {
+  message("[SKIP] No paired CDR3d records available for top MSH2-associated CDR3g Sankey.")
+}
+
+combined_pair_sankey <- plot_combined_marker_pair_sankey(
+  marker_cdr3g_summary,
+  top_cdr3g_cdr3d_summary,
+  marker_cdr3 = msh2_marker_cdr3,
+  top_n = top_msh2_cdr3g_n
+)
+if (!is.null(combined_pair_sankey)) {
+  save_plot(
+    combined_pair_sankey,
+    "msh2_marker_cdr3g_cdr3d_pairing_combined_sankey",
+    18,
+    8,
+    overwrite = force_msh2_plot
+  )
+} else {
+  message("[SKIP] No complete CDR3g/CDR3d records available for combined MSH2 pairing Sankey.")
 }
 
 marker_umap <- plot_marker_umap(all_seurat_celltype)

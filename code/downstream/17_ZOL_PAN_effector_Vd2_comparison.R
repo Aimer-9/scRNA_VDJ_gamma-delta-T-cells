@@ -37,6 +37,12 @@ force_zol_pan_effector_vd2 <- FALSE
 force_zol_pan_effector_vd2_plot <- TRUE
 
 target_cell_types <- c("ZOL Effector Vd2", "PAN Effector Vd2")
+module_score_cell_types <- c("ZOL Effector Vd2", "ZOL FOXP3+ Vd2", "PAN Effector Vd2")
+module_score_comparisons <- list(
+  c("ZOL Effector Vd2", "ZOL FOXP3+ Vd2"),
+  c("ZOL Effector Vd2", "PAN Effector Vd2"),
+  c("ZOL FOXP3+ Vd2", "PAN Effector Vd2")
+)
 comparison_name <- "pan_effector_vd2_vs_zol_effector_vd2"
 comparison_pair <- c("PAN Effector Vd2", "ZOL Effector Vd2")
 
@@ -76,7 +82,8 @@ selected_hallmark_pathways <- c(
 # Load shared palettes plus common IO, metadata, assay, and plotting helpers.
 source_plotting_shared <- function() {
   candidates <- c(
-    "code/downstream/_cache_/plotting_shared.R",
+    "code/downstream/lib/plotting_shared.R",
+    "lib/plotting_shared.R",
     "_cache_/plotting_shared.R",
     "cache/plotting_shared.R"
   )
@@ -333,17 +340,17 @@ add_module_scores <- function(seurat_obj, gene_sets) {
   seurat_obj
 }
 
-make_module_score_long <- function(seurat_obj) {
+make_module_score_long <- function(seurat_obj, cell_types = module_score_cell_types) {
   score_columns <- paste0(names(module_gene_sets), "_score")
   seurat_obj@meta.data %>%
     rownames_to_column("cell_id") %>%
     as_tibble() %>%
-    filter(as.character(cell_type) %in% target_cell_types) %>%
+    filter(as.character(cell_type) %in% cell_types) %>%
     select(cell_id, group, sample_name, cell_type, all_of(score_columns)) %>%
     pivot_longer(cols = all_of(score_columns), names_to = "module", values_to = "score") %>%
     mutate(
       module = str_replace(module, "_score$", ""),
-      cell_type = factor(as.character(cell_type), levels = target_cell_types),
+      cell_type = factor(as.character(cell_type), levels = cell_types),
       group = factor(as.character(group), levels = group_levels)
     )
 }
@@ -366,10 +373,11 @@ plot_module_score_violin <- function(module_scores) {
   if (nrow(module_scores) == 0) {
     return(plot_empty("No module score data available"))
   }
-  comparisons <- list(target_cell_types)
+  present_cell_types <- unique(as.character(module_scores$cell_type))
+  comparisons <- Filter(function(pair) all(pair %in% present_cell_types), module_score_comparisons)
   plot_data <- module_scores %>%
     mutate(
-      cell_type = factor(as.character(cell_type), levels = target_cell_types),
+      cell_type = factor(as.character(cell_type), levels = module_score_cell_types),
       module = factor(as.character(module), levels = names(module_gene_sets))
     )
   ggplot(plot_data, aes(x = cell_type, y = score, fill = cell_type)) +
@@ -382,7 +390,7 @@ plot_module_score_violin <- function(module_scores) {
       hide.ns = FALSE,
       size = 3
     ) +
-    facet_wrap(~module, scales = "free_y", ncol = 3, drop = FALSE) +
+    facet_wrap(~module, scales = "free_y", ncol = 2, drop = FALSE) +
     scale_fill_manual(values = color_celltype, drop = FALSE, guide = "none") +
     scale_x_discrete(drop = FALSE, expand = expansion(mult = c(0.02, 0.02))) +
     coord_cartesian(clip = "off") +
@@ -822,8 +830,10 @@ save_plot(plot_marker_heatmap(marker_summary), "zol_pan_effector_vd2_marker_heat
 save_plot(plot_marker_by_sample(marker_summary, head(marker_genes, 24)), "zol_pan_effector_vd2_marker_by_sample", 12, 7, overwrite = force_zol_pan_effector_vd2_plot)
 
 target_obj <- add_module_scores(target_obj, module_gene_sets)
-module_scores <- make_module_score_long(target_obj)
-module_score_summary <- summarise_module_scores(module_scores)
+module_score_obj <- subset(all_seurat_celltype, cells = rownames(all_seurat_celltype@meta.data)[as.character(all_seurat_celltype$cell_type) %in% module_score_cell_types])
+module_score_obj <- add_module_scores(module_score_obj, module_gene_sets)
+module_scores <- make_module_score_long(module_score_obj)
+module_score_summary <- summarise_module_scores(make_module_score_long(target_obj, target_cell_types))
 write_csv_if_missing(module_score_summary, module_score_summary_csv, "ZOL/PAN effector Vd2 module score summary CSV", overwrite = force_zol_pan_effector_vd2)
 save_plot(plot_module_score_violin(module_scores), "zol_pan_effector_vd2_module_score_violin", 12, 7, overwrite = force_zol_pan_effector_vd2_plot)
 save_plot(plot_module_score_by_sample(module_score_summary), "zol_pan_effector_vd2_module_score_by_sample", 12, 7, overwrite = force_zol_pan_effector_vd2_plot)

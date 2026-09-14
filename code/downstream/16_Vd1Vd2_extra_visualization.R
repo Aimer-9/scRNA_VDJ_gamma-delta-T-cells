@@ -120,7 +120,8 @@ module_gene_sets <- list(
 # Load shared palettes plus common IO, metadata, assay, and plotting helpers.
 source_plotting_shared <- function() {
   candidates <- c(
-    "code/downstream/_cache_/plotting_shared.R",
+    "code/downstream/lib/plotting_shared.R",
+    "lib/plotting_shared.R",
     "_cache_/plotting_shared.R",
     "cache/plotting_shared.R"
   )
@@ -467,9 +468,16 @@ plot_marker_heatmap <- function(marker_summary) {
   ggplot(plot_data, aes(x = cell_type, y = gene, fill = scaled_expression)) +
     geom_tile(color = "white", linewidth = 0.25) +
     facet_grid(gene_class ~ ., scales = "free_y", space = "free_y") +
+    scale_x_discrete(labels = function(x) stringr::str_wrap(x, width = 13), drop = FALSE) +
     scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0) +
     theme_test() +
-    theme(axis.title = element_blank(), axis.text.x = element_text(angle = 35, hjust = 1), strip.background = element_blank()) +
+    theme(
+      axis.title = element_blank(),
+      axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, size = 8, lineheight = 0.9),
+      strip.background = element_blank(),
+      panel.spacing.y = grid::unit(0.08, "lines"),
+      plot.margin = margin(6, 8, 18, 6)
+    ) +
     labs(fill = "Row-scaled\nmean", title = "Average marker expression by Vd1/Vd2 state")
 }
 
@@ -933,7 +941,7 @@ marker_summary <- make_marker_summary(vd1_vd2_obj, marker_genes)
 write_csv_if_missing(marker_summary, marker_summary_csv, "Vd1/Vd2 marker expression summary CSV", overwrite = force_vd1_vd2_extra)
 save_plot(plot_marker_dotplot(vd1_vd2_obj, marker_genes), "vd1_vd2_curated_marker_dotplot", 12, 9, overwrite = force_vd1_vd2_extra_plot)
 save_plot(plot_trdv_expression_violin(vd1_vd2_obj), "vd1_vd2_TRDV1_TRDV2_expression_violin", 10, 6, overwrite = force_vd1_vd2_extra_plot)
-save_plot(plot_marker_heatmap(marker_summary), "vd1_vd2_curated_marker_heatmap", 10, max(6, length(marker_genes) * 0.22), overwrite = force_vd1_vd2_extra_plot)
+save_plot(plot_marker_heatmap(marker_summary), "vd1_vd2_curated_marker_heatmap", 12, max(6, length(marker_genes) * 0.22), overwrite = force_vd1_vd2_extra_plot)
 
 # 4. Functional module scores.
 vd1_vd2_obj <- add_module_scores(vd1_vd2_obj, module_gene_sets)

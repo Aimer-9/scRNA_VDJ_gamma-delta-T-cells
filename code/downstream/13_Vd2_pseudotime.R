@@ -52,7 +52,8 @@ force_vd2_pseudotime_plot <- TRUE
 # Load shared palettes plus common IO, metadata, assay, and plotting helpers.
 source_plotting_shared <- function() {
   candidates <- c(
-    "code/downstream/_cache_/plotting_shared.R",
+    "code/downstream/lib/plotting_shared.R",
+    "lib/plotting_shared.R",
     "_cache_/plotting_shared.R",
     "cache/plotting_shared.R"
   )

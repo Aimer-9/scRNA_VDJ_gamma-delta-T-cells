@@ -5,3 +5,7 @@
 /wecom_mcp.env
 /ftp.env
 scripts/env/*.env
+__pycache__/
+*.pyc
+downstream_runs/
+_targets/

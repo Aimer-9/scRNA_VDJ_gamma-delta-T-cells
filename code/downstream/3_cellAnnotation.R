@@ -31,7 +31,8 @@ seurat_4_marker_file <- file.path(table_dir, "all_seurat_4_seurat_markers.csv")
 
 source_plotting_shared <- function() {
   candidates <- c(
-    "code/downstream/_cache_/plotting_shared.R",
+    "code/downstream/lib/plotting_shared.R",
+    "lib/plotting_shared.R",
     "_cache_/plotting_shared.R",
     "cache/plotting_shared.R"
   )
@@ -255,8 +256,8 @@ annotate_cell_types <- function(seurat_obj) {
 
 grouped_features <- list(
   "Naive" = c("TCF7", "LEF1", "CCR7", "SELL", "IL7R"),
-  "Vd2" = c("TRDV2", "TNF", "CD40LG"),
-  "Vd1" = c("TRDV1", "MAL", "FCER1G"),
+  "Vd2" = c("TNF", "CD40LG"),
+  "Vd1" = c("MAL", "FCER1G"),
   "Proliferating" = c("MKI67", "TOP2A"),
   "Effector" = c("IL2RA", "GZMA", "GZMB", "GZMH", "IFNG"),
   "Exhaustion" = c("PDCD1", "CTLA4", "LAG3", "HAVCR2", "TIGIT"),

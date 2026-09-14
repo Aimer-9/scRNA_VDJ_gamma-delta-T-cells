@@ -151,7 +151,49 @@ To run the downstream R scripts in order and send one final email on success or 
 bash scripts/run_downstream.sh
 ```
 
+## Dependency-Tracked Downstream Builds
+
+The compatibility pipeline under `code/pipeline/` uses `targets` to record
+dependencies and rebuild only affected stages. It preserves the current
+`rds/`, `table/`, and `figures/` artifact paths while the numbered scripts are
+being migrated into modules.
+
+Configure project-specific downstream paths and settings in
+`code/config/analysis.yaml`, then run:
+
+```bash
+bash scripts/run_pipeline.sh
+bash scripts/run_pipeline.sh --target step_10_msh2
+```
+
+Existing automation can opt in without changing its step syntax:
+
+```bash
+bash scripts/run_downstream.sh --targets --step 10
+```
+
+`targets` must be available in the local R package source before running the
+new entry point; `scripts/setup.sh r` reads `renv.lock` and installs it through
+the existing offline setup process.
+
 Each run writes to a new directory named with time and PID under `downstream_runs/`, for example `downstream_runs/20260825_142301_pid12345/`. `run_downstream.sh` copies the downstream scripts into that run directory and patches their working directory, so R outputs such as `rds/`, `figures/`, `table/`, `soupx/`, and optional `pyscenic_10k/` are created under the run directory. Logs are written under `logs/` in the same run directory, with one log file per script plus `run_summary.tsv`, `run_info.tsv`, and `run_message.txt`. On failure, the email includes the failed script, failed log path, and the last 60 log lines. Set `NOTIFY_EMAIL` and `MAIL_FROM` to enable notifications.
+
+To run one step only, use `--step`. To write into an existing run directory, pass either the run name under `downstream_runs/` or the full path:
+
+```bash
+bash scripts/run_downstream.sh --step 10
+bash scripts/run_downstream.sh --step 10_MSH2.R
+bash scripts/run_downstream.sh --existing-run 20260825_213811_pid1045941 --step 10
+bash scripts/run_downstream.sh --resume-run downstream_runs/20260825_213811_pid1045941 --step 10_MSH2.R
+bash scripts/run_downstream.sh --existing-run 20260825_213811_pid1045941 --step 11 \
+  --tf-list /path/to/allTFs_hg38.txt \
+  --ranking-db /path/to/hg38_10kb.feather \
+  --ranking-db /path/to/hg38_500bp.feather \
+  --motif-annotations /path/to/motifs.tbl \
+  --pyscenic-python /path/to/conda/env/bin/python \
+  --force-selection \
+  --force-export
+```
 
 Optional pySCENIC scripts can be included after the main R workflow:
 
@@ -180,7 +222,7 @@ To rebuild a script's outputs without manually deleting files, set that script's
 - `17_ZOL_PAN_effector_Vd2_comparison.R`: `force_zol_pan_effector_vd2`; `force_zol_pan_effector_vd2_plot`
 - `12_pySCENIC_visualization.R`: `force_pyscenic_visualization` or CLI `--overwrite`; use `force_pyscenic_visualization_plot` or CLI `--overwrite-plots` for figures only
 
-`code/downstream/11_pySCENIC.sh` is the pySCENIC workflow. It selects a balanced 10,000-cell subset by `cell_type`, exports expression with sparse-aware chunks, and runs the Python pySCENIC steps through `code/downstream/_cache_/pyscenic_run.py`; use `--pyscenic-python` to run the Python part from a specific conda environment.
+`code/downstream/11_pySCENIC.sh` is the pySCENIC workflow. It selects a balanced 10,000-cell subset by `cell_type`, exports expression with sparse-aware chunks, and runs the Python pySCENIC steps through `code/downstream/lib/pyscenic_run.py`; use `--pyscenic-python` to run the Python part from a specific conda environment.
 
 ## Runtime Inputs
 
@@ -190,16 +232,16 @@ Core inputs expected by the pipeline:
 - `config/params.yaml`: Cell Ranger references, executable paths, output root, thread/memory settings, and optional local setup settings.
 - `scripts/setup.sh` and `docs/setup.md`: parameter-driven local setup for runtime folders, software links, references, and R package library preparation.
 - Cell Ranger multi outputs under the path configured in `1_ReadData.R` and `params.yaml`.
-- `code/downstream/_cache_/plotting_shared.R`: shared group/sample/cell-type levels, palettes, and plot-saving helpers.
+- `code/downstream/lib/plotting_shared.R`: shared group/sample/cell-type levels, palettes, and plot-saving helpers.
 - Optional pySCENIC resources: TF list, cisTarget ranking databases, and motif annotation table.
 
 The repository currently stores the shared plotting file at:
 
 ```text
-code/downstream/_cache_/plotting_shared.R
+code/downstream/lib/plotting_shared.R
 ```
 
-The downstream scripts first look for this repository path, then `_cache_/plotting_shared.R`, then the legacy runtime path `cache/plotting_shared.R`.
+The downstream scripts first look for this repository path, then `lib/plotting_shared.R` inside copied run scripts, then legacy `_cache_`/`cache` fallback paths.
 
 ## Main Outputs
 
@@ -237,7 +279,7 @@ Figures are written to step-specific subdirectories under `figures/`, for exampl
 
 `16_Vd1Vd2_extra_visualization.R` adds figure-first Vd1/Vd2 comparison panels: UMAP state highlights, sample-level cell fractions, curated marker dotplots and heatmaps, module-score summaries, expanded DE volcano/overlap/top-gene heatmaps, and repertoire-aware clone-size, top-CDR3, paired-clone alluvial, and paired-clone sharing heatmap outputs.
 
-`17_ZOL_PAN_effector_Vd2_comparison.R` focuses on `ZOL Effector Vd2` versus `PAN Effector Vd2`: UMAP context/density, sample-level abundance and ratio plots, curated marker and module-score summaries, DE volcano/lollipop/top-gene heatmap, Hallmark pathway delta/selected heatmap, and clone-size/top-CDR3/paired-clone repertoire views.
+`17_ZOL_PAN_effector_Vd2_comparison.R` focuses on `ZOL Effector Vd2` versus `PAN Effector Vd2`: UMAP context/density, sample-level abundance and ratio plots, curated marker and module-score summaries, DE volcano/lollipop/top-gene heatmap, Hallmark pathway delta/selected heatmap, and clone-size/top-CDR3/paired-clone repertoire views. Its module-score violin additionally includes `ZOL FOXP3+ Vd2` and shows all pairwise state comparisons; the remaining Step 17 analyses retain the ZOL-versus-PAN scope.
 
 ## Downstream Order
 
@@ -276,7 +318,7 @@ The current cell type vocabulary is:
 - `Pre-activated Vd1`
 - `Effector Vd1`
 
-The palette and factor levels are centralized in `code/downstream/_cache_/plotting_shared.R`.
+The palette and factor levels are centralized in `code/downstream/lib/plotting_shared.R`.
 
 ## pySCENIC
 
@@ -365,4 +407,4 @@ It requires the R packages `hdf5r`, `ComplexHeatmap`, `circlize`, `Seurat`, `dpl
 
 - `scripts/cellranger.sh` is the Cell Ranger entry point and uses implementation files under `code/cellranger/src`.
 - Downstream R scripts use hardcoded `setwd("/path/to/project")`; change this in each script or reproduce that runtime path.
-- Downstream R scripts source `code/downstream/_cache_/plotting_shared.R` with fallbacks for `_cache_/plotting_shared.R` and `cache/plotting_shared.R`.
+- Downstream R scripts source `code/downstream/lib/plotting_shared.R` with fallbacks for `_cache_/plotting_shared.R` and `cache/plotting_shared.R`.

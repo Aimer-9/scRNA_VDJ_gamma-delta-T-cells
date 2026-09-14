@@ -25,7 +25,6 @@
 #     --group-by cell_type \
 #     --reduction umap.unintegrated \
 #     --n-top-regulons 30 \
-#     --n-umap-regulons 12
 #
 # Analysis performed:
 #   1. Validate and read the AUCell loom into a regulons-by-cells matrix.
@@ -39,27 +38,15 @@
 #        - grouped z-score heatmap for the top regulons;
 #        - dot plot where color is mean AUC and size is the percentage of
 #          cells above that regulon's global median AUC;
-#        - UMAP panels colored by per-cell AUC for top regulons.
 #
 # Outputs:
 #   figures/12_pySCENIC_visualization/pyscenic_regulon_activity_heatmap_by_<group>.{png,pdf}
 #   figures/12_pySCENIC_visualization/pyscenic_regulon_activity_dotplot_by_<group>.{png,pdf}
-#   figures/12_pySCENIC_visualization/pyscenic_regulon_activity_umap_top.{png,pdf}
 #   figures/12_pySCENIC_visualization/pyscenic_curated_tf_heatmap.{png,pdf}
-#   figures/12_pySCENIC_visualization/pyscenic_curated_tf_dotplot.{png,pdf}
-#   figures/12_pySCENIC_visualization/pyscenic_curated_tf_umap.{png,pdf}
-#   figures/12_pySCENIC_visualization/pyscenic_curated_tf_feature_umap.{png,pdf}
-#   figures/12_pySCENIC_visualization/pyscenic_curated_tf_interpretation_table.{png,pdf}
-#   figures/12_pySCENIC_visualization/pyscenic_vd2_effector_regulon_heatmap.{png,pdf}
 #   figures/12_pySCENIC_visualization/pyscenic_vd2_effector_regulon_dotplot.{png,pdf}
-#   figures/12_pySCENIC_visualization/pyscenic_vd2_effector_regulon_delta_plot.{png,pdf}
 #   figures/12_pySCENIC_visualization/pyscenic_zol_foxp3_vd2_function_gene_heatmap.{png,pdf}
 #   figures/12_pySCENIC_visualization/pyscenic_zol_foxp3_vd2_function_gene_dotplot.{png,pdf}
-#   figures/12_pySCENIC_visualization/pyscenic_zol_foxp3_vd2_function_gene_umap.{png,pdf}
-#   figures/12_pySCENIC_visualization/pyscenic_zol_foxp3_vd2_foxp3_regulon_boxplot.{png,pdf}
-#   figures/12_pySCENIC_visualization/pyscenic_sox4_target_network_by_state.{png,pdf}
 #   figures/12_pySCENIC_visualization/pyscenic_sox4_target_expression_heatmap.{png,pdf}
-#   figures/12_pySCENIC_visualization/pyscenic_sox4_target_scatter.{png,pdf}
 #   table/pyscenic/pyscenic_regulon_activity_by_group.csv
 #   table/pyscenic/pyscenic_selected_regulons.txt
 #   table/pyscenic/pyscenic_curated_tf_interpretation.csv
@@ -93,7 +80,8 @@ force_pyscenic_visualization_plot <- TRUE
 
 source_plotting_shared <- function() {
   candidates <- c(
-    "code/downstream/_cache_/plotting_shared.R",
+    "code/downstream/lib/plotting_shared.R",
+    "lib/plotting_shared.R",
     "_cache_/plotting_shared.R",
     "cache/plotting_shared.R"
   )
@@ -101,6 +89,20 @@ source_plotting_shared <- function() {
   if (!is.na(plotting_shared)) {
     source(plotting_shared)
   }
+}
+
+infer_project_dir <- function() {
+  command_args <- commandArgs(trailingOnly = FALSE)
+  file_arg <- "--file="
+  script_path <- sub(file_arg, "", command_args[startsWith(command_args, file_arg)][1])
+  if (!is.na(script_path) && nzchar(script_path)) {
+    script_path <- normalizePath(script_path, mustWork = FALSE)
+    script_dir <- dirname(script_path)
+    if (basename(script_dir) == "downstream_scripts") {
+      return(dirname(script_dir))
+    }
+  }
+  getwd()
 }
 
 get_group_palette <- function(group_by, group_values) {
@@ -128,7 +130,7 @@ add_group_color_scale <- function(plot, group_palette) {
 # Paths are interpreted relative to project_dir after parsing.
 parse_args <- function(args) {
   config <- list(
-    project_dir = "/path/to/project",
+    project_dir = infer_project_dir(),
     auc_loom = "pyscenic_10k/auc_mtx.loom",
     regulons_csv = "pyscenic_10k/regulons.csv",
     adj_tsv = "pyscenic_10k/adjacencies.tsv",
@@ -138,9 +140,7 @@ parse_args <- function(args) {
     group_by = "cell_type",
     reduction = "umap.unintegrated",
     n_top_regulons = 30L,
-    n_umap_regulons = 12L,
     sox4_top_targets = 30L,
-    sox4_scatter_targets = 12L,
     figure_dir = file.path("figures", "12_pySCENIC_visualization"),
     table_dir = "table/pyscenic",
     result_rds = "rds/pyscenic_visualization_result.rds",
@@ -164,9 +164,7 @@ parse_args <- function(args) {
         "  --group-by COLUMN\n",
         "  --reduction NAME\n",
         "  --n-top-regulons INT\n",
-        "  --n-umap-regulons INT\n",
         "  --sox4-top-targets INT\n",
-        "  --sox4-scatter-targets INT\n",
         "  --figure-dir DIR\n",
         "  --table-dir DIR\n",
         "  --result-rds PATH\n",
@@ -191,8 +189,7 @@ parse_args <- function(args) {
       stop("Missing value for ", flag, call. = FALSE)
     }
     value <- args[[i + 1L]]
-    key <- switch(
-      flag,
+    key <- switch(flag,
       "--project-dir" = "project_dir",
       "--auc-loom" = "auc_loom",
       "--regulons-csv" = "regulons_csv",
@@ -203,9 +200,7 @@ parse_args <- function(args) {
       "--group-by" = "group_by",
       "--reduction" = "reduction",
       "--n-top-regulons" = "n_top_regulons",
-      "--n-umap-regulons" = "n_umap_regulons",
       "--sox4-top-targets" = "sox4_top_targets",
-      "--sox4-scatter-targets" = "sox4_scatter_targets",
       "--figure-dir" = "figure_dir",
       "--table-dir" = "table_dir",
       "--result-rds" = "result_rds",
@@ -216,20 +211,18 @@ parse_args <- function(args) {
   }
 
   config$n_top_regulons <- as.integer(config$n_top_regulons)
-  config$n_umap_regulons <- as.integer(config$n_umap_regulons)
   config$sox4_top_targets <- as.integer(config$sox4_top_targets)
-  config$sox4_scatter_targets <- as.integer(config$sox4_scatter_targets)
   if (is.na(config$n_top_regulons) || config$n_top_regulons < 1L) {
     stop("--n-top-regulons must be a positive integer.", call. = FALSE)
-  }
-  if (is.na(config$n_umap_regulons) || config$n_umap_regulons < 1L) {
-    stop("--n-umap-regulons must be a positive integer.", call. = FALSE)
   }
   if (is.na(config$sox4_top_targets) || config$sox4_top_targets < 1L) {
     stop("--sox4-top-targets must be a positive integer.", call. = FALSE)
   }
-  if (is.na(config$sox4_scatter_targets) || config$sox4_scatter_targets < 1L) {
-    stop("--sox4-scatter-targets must be a positive integer.", call. = FALSE)
+  config$project_dir <- normalizePath(config$project_dir, mustWork = FALSE)
+  for (path_key in c("auc_loom", "regulons_csv", "adj_tsv", "seurat_rds", "figure_dir", "table_dir", "result_rds")) {
+    if (!grepl("^/", config[[path_key]])) {
+      config[[path_key]] <- file.path(config$project_dir, config[[path_key]])
+    }
   }
   config
 }
@@ -237,7 +230,16 @@ parse_args <- function(args) {
 # Reject missing and zero-byte inputs before loading large R packages/objects.
 check_file <- function(path, label) {
   if (!file.exists(path) || file.info(path)$size == 0) {
-    stop("Missing or empty ", label, ": ", normalizePath(path, mustWork = FALSE), call. = FALSE)
+    extra <- ""
+    if (grepl("auc_mtx[.]loom$", path)) {
+      extra <- paste0(
+        "\nRun pySCENIC first, for example:\n",
+        "  bash scripts/run_downstream.sh --existing-run <run_id> --step 11 ",
+        "--tf-list <TF_LIST> --ranking-db <RANKING_DB> --motif-annotations <MOTIF_ANNOTATIONS>\n",
+        "Then rerun step 12."
+      )
+    }
+    stop("Missing or empty ", label, ": ", normalizePath(path, mustWork = FALSE), extra, call. = FALSE)
   }
 }
 
@@ -328,7 +330,7 @@ read_regulon_auc <- function(loom_path) {
   }
 
   if (nrow(auc_cells_by_regulon) != length(cell_ids) &&
-      ncol(auc_cells_by_regulon) == length(cell_ids)) {
+    ncol(auc_cells_by_regulon) == length(cell_ids)) {
     auc_cells_by_regulon <- t(auc_cells_by_regulon)
   }
   if (nrow(auc_cells_by_regulon) != length(cell_ids)) {
@@ -466,11 +468,12 @@ vd2_effector_curated_tfs <- c(
 )
 
 make_vd2_effector_comparison <- function(
-    auc_matrix,
-    seurat_obj,
-    states = vd2_effector_compare_states,
-    curated_tfs = vd2_effector_curated_tfs,
-    top_n = 30L) {
+  auc_matrix,
+  seurat_obj,
+  states = vd2_effector_compare_states,
+  curated_tfs = vd2_effector_curated_tfs,
+  top_n = 30L
+) {
   if (!"cell_type" %in% colnames(seurat_obj@meta.data)) {
     message("[SKIP] Seurat metadata has no cell_type column for Vd2 effector pySCENIC comparison.")
     return(NULL)
@@ -516,7 +519,7 @@ make_vd2_effector_comparison <- function(
     mutate(
       display_label = ifelse(tf %in% curated_table$tf, paste0(tf, " *"), tf),
       display_label = make.unique(display_label)
-  )
+    )
   heatmap_matrix <- summary_result$zscore[selected_regulons, levels(target_groups), drop = FALSE]
   rownames(heatmap_matrix) <- labels$display_label
 
@@ -599,40 +602,29 @@ plot_vd2_effector_dotplot <- function(dotplot_data) {
     )
 }
 
-plot_vd2_effector_delta <- function(delta_plot_data) {
-  if (nrow(delta_plot_data) == 0L) {
-    return(NULL)
-  }
-  plot_data <- delta_plot_data %>%
-    group_by(comparison) %>%
-    arrange(delta, .by_group = TRUE) %>%
-    mutate(regulon_label = factor(tf, levels = unique(tf))) %>%
-    ungroup()
-
-  ggplot(plot_data, aes(x = delta, y = regulon_label, color = higher_in)) +
-    geom_vline(xintercept = 0, color = "grey65", linewidth = 0.35) +
-    geom_segment(aes(x = 0, xend = delta, yend = regulon_label), linewidth = 0.7) +
-    geom_point(aes(shape = curated), size = 2.4) +
-    facet_wrap(~comparison, scales = "free_y", ncol = 1) +
-    scale_shape_manual(values = c("TRUE" = 17, "FALSE" = 16), name = "Curated TF") +
-    theme_bw() +
-    theme(
-      axis.title.y = element_blank(),
-      strip.text = element_text(face = "bold"),
-      panel.grid.major.y = element_blank()
-    ) +
-    labs(
-      x = "Mean AUCell delta: first state - second state",
-      color = "Higher in",
-      title = "Pairwise regulon activity deltas among Vd2 effector states"
-    )
-}
-
 zol_foxp3_vd2_states <- c(
-  "ZOL Effector Vd2",
+  "Effector Memory Vd2",
+  "Pre-activated Vd2",
   "ZOL FOXP3+ Vd2",
+  "ZOL Effector Vd2",
   "PAN Effector Vd2"
 )
+
+get_all_vd2_states <- function(cell_types, preferred_states = zol_foxp3_vd2_states) {
+  all_states <- unique(as.character(cell_types))
+  all_states <- all_states[!is.na(all_states) & grepl("Vd2", all_states)]
+  if (length(all_states) == 0L) {
+    return(character())
+  }
+  if (exists("cell_type_levels", inherits = TRUE)) {
+    level_order <- get("cell_type_levels", inherits = TRUE)
+    ordered_states <- level_order[level_order %in% all_states]
+    ordered_states <- c(ordered_states, setdiff(all_states, ordered_states))
+  } else {
+    ordered_states <- sort(all_states)
+  }
+  c(preferred_states[preferred_states %in% ordered_states], setdiff(ordered_states, preferred_states))
+}
 
 zol_foxp3_function_gene_sets <- list(
   "FOXP3 regulatory program" = c(
@@ -715,6 +707,7 @@ make_function_gene_heatmap <- function(expression_summary, states = zol_foxp3_vd
   if (nrow(expression_summary) == 0L) {
     return(NULL)
   }
+  function_levels <- names(zol_foxp3_function_gene_sets)
   mean_matrix <- expression_summary %>%
     mutate(group = factor(group, levels = states)) %>%
     select(gene, function_group, group, mean_expression) %>%
@@ -730,124 +723,90 @@ make_function_gene_heatmap <- function(expression_summary, states = zol_foxp3_vd
   row_sd[is.na(row_sd) | row_sd == 0] <- 1
   z_matrix <- sweep(matrix_data, 1, rowMeans(matrix_data), "-")
   z_matrix <- sweep(z_matrix, 1, row_sd, "/")
-  row_split <- factor(row_info$function_group, levels = names(zol_foxp3_function_gene_sets))
+  row_function <- factor(row_info$function_group, levels = function_levels)
+  names(row_function) <- row_info$gene
+  module_colors <- setNames(
+    c("#B2182B", "#E69F00", "#2166AC", "#4D9221")[seq_along(function_levels)],
+    function_levels
+  )
+  row_ha <- rowAnnotation(
+    module = row_function,
+    col = list(module = module_colors),
+    show_annotation_name = TRUE
+  )
 
   Heatmap(
     z_matrix,
-    name = "z-score",
+    name = "expr z-score",
     col = colorRamp2(c(-2, 0, 2), c("#2166AC", "#F7F7F7", "#B2182B")),
-    cluster_rows = FALSE,
+    cluster_rows = TRUE,
     cluster_columns = FALSE,
-    row_split = row_split,
     show_row_names = TRUE,
-    row_names_gp = gpar(fontsize = 8),
+    row_names_gp = gpar(fontsize = 7),
     column_names_gp = gpar(fontsize = 9),
-    border = TRUE,
-    row_title = "Function genes",
-    column_title = "ZOL FOXP3+ Vd2 functional gene expression"
+    left_annotation = row_ha,
+    row_title = "FOXP3-related genes",
+    column_title = "Mean FOXP3-related gene expression by Vd2 state"
   )
 }
 
-plot_function_gene_dotplot <- function(expression_summary, states = zol_foxp3_vd2_states) {
+plot_function_gene_dotplot <- function(
+  expression_summary,
+  seurat_obj,
+  cells,
+  states = zol_foxp3_vd2_states,
+  gene_sets = zol_foxp3_function_gene_sets
+) {
   if (nrow(expression_summary) == 0L) {
     return(NULL)
   }
+  function_levels <- names(gene_sets)
+  gene_levels <- rev(unlist(gene_sets[function_levels], use.names = FALSE))
+  gene_levels <- gene_levels[gene_levels %in% expression_summary$gene]
   plot_data <- expression_summary %>%
     mutate(
       group = factor(group, levels = states),
-      gene = factor(gene, levels = rev(unique(gene[order(function_group, gene)])))
+      function_group = factor(function_group, levels = function_levels),
+      gene = factor(gene, levels = gene_levels)
     )
   ggplot(plot_data, aes(group, gene)) +
     geom_point(aes(size = percent_expressing, color = mean_expression)) +
+    facet_grid(function_group ~ ., scales = "free_y", space = "free_y") +
     scale_color_viridis_c(option = "plasma") +
-    scale_size(range = c(1, 7)) +
+    scale_size(range = c(0.8, 6.5), limits = c(0, 100)) +
     theme_bw() +
     theme(
       axis.title = element_blank(),
       axis.text.x = element_text(angle = 35, hjust = 1),
+      strip.text.y = element_text(angle = 0, hjust = 0),
+      panel.spacing.y = unit(0.08, "in"),
       panel.grid = element_line(linewidth = 0.2, color = "grey90")
     ) +
     labs(
-      title = "Function-gene expression in ZOL FOXP3+ and effector Vd2 states",
+      title = "FOXP3-related function-gene expression across Vd2 states",
       color = "Mean expression",
       size = "% expressing"
     )
 }
 
-make_function_gene_umap <- function(expression_matrix, seurat_obj, reduction, genes) {
-  present_genes <- intersect(genes, rownames(expression_matrix))
-  if (length(present_genes) == 0L) {
-    return(NULL)
-  }
-  coordinates <- Embeddings(seurat_obj, reduction = reduction)
-  coordinates <- coordinates[colnames(expression_matrix), 1:2, drop = FALSE]
-  colnames(coordinates) <- c("UMAP_1", "UMAP_2")
-  plots <- lapply(present_genes, function(gene) {
-    expression <- dense_feature_vector(expression_matrix, gene)
-    plot_data <- data.frame(coordinates, expression = expression[rownames(coordinates)])
-    ggplot(plot_data, aes(UMAP_1, UMAP_2, color = expression)) +
-      geom_point(size = 0.25, alpha = 0.85) +
-      scale_color_viridis_c(option = "magma") +
-      coord_fixed() +
-      theme_void() +
-      theme(
-        plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
-        legend.position = "right",
-        legend.key.height = unit(8, "mm")
-      ) +
-      labs(title = gene, color = "Expression")
-  })
-  wrap_plots(plots, ncol = 4)
-}
-
-plot_foxp3_regulon_auc_boxplot <- function(auc_matrix, groups, foxp3_regulon, states = zol_foxp3_vd2_states) {
-  if (is.na(foxp3_regulon) || !foxp3_regulon %in% rownames(auc_matrix)) {
-    return(NULL)
-  }
-  cells <- names(groups)[groups %in% states]
-  if (length(cells) == 0L) {
-    return(NULL)
-  }
-  plot_data <- tibble(
-    cell = cells,
-    group = factor(groups[cells], levels = states),
-    auc = as.numeric(auc_matrix[foxp3_regulon, cells])
-  )
-  plot <- ggplot(plot_data, aes(group, auc, fill = group)) +
-    geom_boxplot(width = 0.55, outlier.shape = NA, alpha = 0.85) +
-    geom_jitter(width = 0.18, size = 0.25, alpha = 0.25) +
-    theme_bw() +
-    theme(
-      legend.position = "none",
-      axis.title.x = element_blank(),
-      axis.text.x = element_text(angle = 35, hjust = 1)
-    ) +
-    ylab("FOXP3 regulon AUC") +
-    labs(title = "FOXP3 regulon activity in ZOL FOXP3+ Vd2")
-  palette <- get_group_palette("cell_type", states)
-  if (!is.null(palette) && length(palette) > 0L) {
-    plot <- plot + scale_fill_manual(values = palette, drop = FALSE)
-  }
-  plot
-}
-
 make_zol_foxp3_function_gene_analysis <- function(
-    auc_matrix,
-    seurat_obj,
-    assay,
-    layer,
-    reduction,
-    states = zol_foxp3_vd2_states,
-    gene_sets = zol_foxp3_function_gene_sets) {
+  auc_matrix,
+  seurat_obj,
+  assay,
+  layer,
+  states = zol_foxp3_vd2_states,
+  gene_sets = zol_foxp3_function_gene_sets
+) {
   if (!"cell_type" %in% colnames(seurat_obj@meta.data)) {
     message("[SKIP] Seurat metadata has no cell_type column for ZOL FOXP3+ function-gene analysis.")
     return(NULL)
   }
   cell_types <- as.character(seurat_obj@meta.data[colnames(auc_matrix), "cell_type", drop = TRUE])
   names(cell_types) <- colnames(auc_matrix)
+  states <- get_all_vd2_states(cell_types, preferred_states = states)
   present_states <- states[states %in% unique(cell_types)]
   if (!"ZOL FOXP3+ Vd2" %in% present_states || length(present_states) < 2L) {
-    message("[SKIP] ZOL FOXP3+ function-gene analysis needs ZOL FOXP3+ Vd2 and at least one reference state.")
+    message("[SKIP] FOXP3-related Vd2 function-gene analysis needs ZOL FOXP3+ Vd2 and at least one other Vd2 state.")
     return(NULL)
   }
   target_cells <- names(cell_types)[cell_types %in% present_states]
@@ -869,23 +828,22 @@ make_zol_foxp3_function_gene_analysis <- function(
     gene_function_map
   )
   delta_table <- calculate_function_gene_delta(expression_summary, ident_1 = "ZOL FOXP3+ Vd2")
-  foxp3_regulon <- choose_tf_regulon(auc_matrix, "FOXP3")
-  selected_umap_genes <- c(
-    "FOXP3", "IL2RA", "CTLA4", "TIGIT", "ICOS", "PDCD1",
-    "IRF1", "NR3C1", "XBP1", "NKG7", "GZMB", "IFNG"
-  )
 
   list(
     cells = target_cells,
     groups = target_groups,
+    states = present_states,
     expression_matrix = expression_matrix,
     expression_summary = expression_summary,
     delta_table = delta_table,
     heatmap = make_function_gene_heatmap(expression_summary, states = states),
-    dotplot = plot_function_gene_dotplot(expression_summary, states = states),
-    umap = make_function_gene_umap(expression_matrix, seurat_obj, reduction, selected_umap_genes),
-    foxp3_regulon = foxp3_regulon,
-    foxp3_regulon_boxplot = plot_foxp3_regulon_auc_boxplot(auc_matrix, target_groups, foxp3_regulon, states = states)
+    dotplot = plot_function_gene_dotplot(
+      expression_summary,
+      seurat_obj = seurat_obj,
+      cells = target_cells,
+      states = states,
+      gene_sets = gene_sets
+    )
   )
 }
 
@@ -958,85 +916,19 @@ match_curated_regulons <- function(annotations, regulon_names) {
   matched <- regulon_index %>%
     filter(tf %in% annotations$tf) %>%
     distinct(tf, .keep_all = TRUE) %>%
-    select(tf, matched_regulon = regulon)
+    transmute(
+      tf,
+      matched_regulon = regulon,
+      regulon_sign = case_when(
+        grepl("\\(\\+\\)$", regulon) ~ "+",
+        grepl("\\(-\\)$", regulon) ~ "-",
+        TRUE ~ NA_character_
+      )
+    )
 
   annotations %>%
     left_join(matched, by = "tf") %>%
     mutate(detected = !is.na(matched_regulon))
-}
-
-# Wrap long prose into stable line widths for the publication-style table.
-wrap_table_text <- function(values, width) {
-  vapply(
-    values,
-    function(value) paste(strwrap(value, width = width), collapse = "\n"),
-    character(1)
-  )
-}
-
-# Render the curated biological interpretation as a readable figure rather
-# than embedding long prose in heatmap annotations. Alternating row fills
-# improve scanning across the four requested columns.
-make_curated_tf_table_plot <- function(curated_table) {
-  plot_data <- curated_table %>%
-    mutate(
-      row_id = rev(seq_len(n())),
-      tf_display = ifelse(detected, tf, paste0(tf, " [not detected]")),
-      cell_type_display = wrap_table_text(highest_associated_cell_types, 24),
-      function_display = wrap_table_text(established_t_cell_function, 42),
-      interpretation_display = wrap_table_text(predicted_interpretation, 38),
-      row_fill = ifelse(seq_len(n()) %% 2L == 0L, "#F3F5F7", "#FFFFFF")
-    )
-
-  headers <- tibble(
-    x = c(0.02, 0.15, 0.36, 0.72),
-    label = c(
-      "TF regulon",
-      "Highest-associated cell type(s)",
-      "Established T-cell function",
-      "Predicted interpretation"
-    )
-  )
-
-  ggplot(plot_data) +
-    geom_rect(
-      aes(xmin = 0, xmax = 1, ymin = row_id - 0.48, ymax = row_id + 0.48, fill = row_fill),
-      color = NA
-    ) +
-    scale_fill_identity() +
-    geom_text(
-      aes(x = 0.02, y = row_id, label = tf_display, color = detected),
-      hjust = 0, size = 3.2, fontface = "bold"
-    ) +
-    scale_color_manual(values = c("TRUE" = "#1B4F72", "FALSE" = "#9E9E9E"), guide = "none") +
-    geom_text(
-      aes(x = 0.15, y = row_id, label = cell_type_display),
-      hjust = 0, size = 2.8, lineheight = 0.9
-    ) +
-    geom_text(
-      aes(x = 0.36, y = row_id, label = function_display),
-      hjust = 0, size = 2.65, lineheight = 0.9
-    ) +
-    geom_text(
-      aes(x = 0.72, y = row_id, label = interpretation_display),
-      hjust = 0, size = 2.65, lineheight = 0.9
-    ) +
-    geom_text(
-      data = headers,
-      aes(x = x, y = nrow(plot_data) + 0.8, label = label),
-      inherit.aes = FALSE,
-      hjust = 0,
-      size = 3.1,
-      fontface = "bold"
-    ) +
-    geom_hline(yintercept = nrow(plot_data) + 0.35, linewidth = 0.5, color = "#4D4D4D") +
-    coord_cartesian(xlim = c(0, 1), ylim = c(0.4, nrow(plot_data) + 1.15), clip = "off") +
-    theme_void() +
-    theme(
-      plot.margin = margin(8, 12, 8, 8),
-      plot.title = element_text(size = 13, face = "bold", hjust = 0)
-    ) +
-    labs(title = "Curated TF regulons and predicted Vd1/Vd2 interpretation")
 }
 
 # Save both raster and vector forms. Existing non-empty pairs are checkpoints
@@ -1067,114 +959,6 @@ save_complex_heatmap <- function(heatmap, stem, width, height, overwrite) {
   ComplexHeatmap::draw(heatmap)
   dev.off()
   invisible(TRUE)
-}
-
-# Plot per-cell AUC on the precomputed Seurat UMAP. This does not rerun UMAP
-# and therefore preserves the layout used in the main cell-annotation figures.
-make_umap_plots <- function(auc_matrix, seurat_obj, reduction, regulons) {
-  coordinates <- Embeddings(seurat_obj, reduction = reduction)
-  coordinates <- coordinates[colnames(auc_matrix), 1:2, drop = FALSE]
-  colnames(coordinates) <- c("UMAP_1", "UMAP_2")
-
-  plots <- lapply(regulons, function(regulon) {
-    plot_data <- data.frame(
-      coordinates,
-      activity = as.numeric(auc_matrix[regulon, rownames(coordinates)])
-    )
-    ggplot(plot_data, aes(UMAP_1, UMAP_2, color = activity)) +
-      geom_point(size = 0.2, alpha = 0.85) +
-      scale_color_viridis_c(option = "magma") +
-      coord_fixed() +
-      theme_void() +
-      theme(
-        plot.title = element_text(size = 9, hjust = 0.5),
-        legend.position = "right",
-        legend.key.height = unit(8, "mm")
-      ) +
-      labs(title = regulon, color = "AUC")
-  })
-  wrap_plots(plots, ncol = 3)
-}
-
-# Curated UMAP variant using concise TF symbols as panel titles while reading
-# activity from the full matched pySCENIC regulon names.
-make_curated_tf_umap_plots <- function(
-    auc_matrix,
-    seurat_obj,
-    reduction,
-    regulons,
-    tf_labels) {
-  coordinates <- Embeddings(seurat_obj, reduction = reduction)
-  coordinates <- coordinates[colnames(auc_matrix), 1:2, drop = FALSE]
-  colnames(coordinates) <- c("UMAP_1", "UMAP_2")
-
-  plots <- Map(function(regulon, tf_label) {
-    plot_data <- data.frame(
-      coordinates,
-      activity = as.numeric(auc_matrix[regulon, rownames(coordinates)])
-    )
-    ggplot(plot_data, aes(UMAP_1, UMAP_2, color = activity)) +
-      geom_point(size = 0.2, alpha = 0.85) +
-      scale_color_viridis_c(option = "magma") +
-      coord_fixed() +
-      theme_void() +
-      theme(
-        plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
-        legend.position = "right",
-        legend.key.height = unit(8, "mm")
-      ) +
-      labs(
-        title = tf_label,
-        subtitle = regulon,
-        color = "AUC"
-      )
-  }, regulons, tf_labels)
-
-  wrap_plots(plots, ncol = 3)
-}
-
-make_curated_tf_feature_umap_plots <- function(
-    expression_matrix,
-    seurat_obj,
-    reduction,
-    tf_labels) {
-  present_tfs <- intersect(tf_labels, rownames(expression_matrix))
-  missing_tfs <- setdiff(tf_labels, present_tfs)
-  if (length(missing_tfs) > 0L) {
-    message("[SKIP] Missing curated TF genes in expression matrix: ", paste(missing_tfs, collapse = ", "))
-  }
-  if (length(present_tfs) == 0L) {
-    return(NULL)
-  }
-
-  coordinates <- Embeddings(seurat_obj, reduction = reduction)
-  coordinates <- coordinates[colnames(expression_matrix), 1:2, drop = FALSE]
-  colnames(coordinates) <- c("UMAP_1", "UMAP_2")
-
-  plots <- lapply(present_tfs, function(tf) {
-    expression <- dense_feature_vector(expression_matrix, tf)
-    plot_data <- data.frame(
-      coordinates,
-      expression = expression[rownames(coordinates)]
-    )
-    ggplot(plot_data, aes(UMAP_1, UMAP_2, color = expression)) +
-      geom_point(size = 0.2, alpha = 0.85) +
-      scale_color_viridis_c(option = "magma") +
-      coord_fixed() +
-      theme_void() +
-      theme(
-        plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
-        legend.position = "right",
-        legend.key.height = unit(8, "mm")
-      ) +
-      labs(
-        title = tf,
-        subtitle = "gene expression",
-        color = "Expression"
-      )
-  })
-
-  wrap_plots(plots, ncol = 3)
 }
 
 # ---------------------------------------------------------------------------
@@ -1350,14 +1134,15 @@ dense_feature_vector <- function(expression_matrix, feature) {
 }
 
 make_sox4_associations <- function(
-    auc_matrix,
-    seurat_obj,
-    groups,
-    regulons_csv,
-    adj_tsv,
-    assay,
-    layer,
-    top_targets) {
+  auc_matrix,
+  seurat_obj,
+  groups,
+  regulons_csv,
+  adj_tsv,
+  assay,
+  layer,
+  top_targets
+) {
   sox4_regulon <- choose_tf_regulon(auc_matrix, "SOX4")
   if (is.na(sox4_regulon)) {
     message("[SKIP] SOX4 regulon was not detected in AUCell matrix.")
@@ -1460,85 +1245,6 @@ make_sox4_associations <- function(
   )
 }
 
-make_sox4_network_plot <- function(association_table, sox4_regulon) {
-  target_layout <- association_table %>%
-    filter(selected_for_plot, direction %in% c("promotion_association", "inhibition_association")) %>%
-    group_by(target) %>%
-    summarise(
-      max_abs_rho = max(abs(spearman_rho), na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    mutate(max_abs_rho = ifelse(is.infinite(max_abs_rho), NA_real_, max_abs_rho)) %>%
-    arrange(desc(max_abs_rho), target) %>%
-    mutate(
-      target_index = row_number(),
-      angle = 2 * pi * (target_index - 1) / n(),
-      target_x = cos(angle),
-      target_y = sin(angle)
-    )
-
-  if (nrow(target_layout) == 0L) {
-    return(NULL)
-  }
-
-  plot_data <- association_table %>%
-    filter(selected_for_plot, target %in% target_layout$target) %>%
-    left_join(target_layout, by = "target") %>%
-    ungroup() %>%
-    mutate(
-      sox4_x = 0,
-      sox4_y = 0,
-      direction_label = recode(
-        direction,
-        promotion_association = "positive association",
-        inhibition_association = "negative association"
-      )
-    )
-
-  plot_data <- plot_data %>%
-    filter(direction_label %in% c("positive association", "negative association"))
-
-  if (nrow(plot_data) == 0L) {
-    return(NULL)
-  }
-
-  ggplot(plot_data) +
-    geom_segment(
-      aes(
-        x = sox4_x,
-        y = sox4_y,
-        xend = target_x,
-        yend = target_y,
-        color = direction_label,
-        linewidth = abs(spearman_rho)
-      ),
-      alpha = 0.85,
-      lineend = "round"
-    ) +
-    geom_point(aes(x = target_x, y = target_y, size = max_mean_expression), color = "#4D4D4D") +
-    geom_point(aes(x = sox4_x, y = sox4_y), size = 8, color = "#1B4F72") +
-    geom_text(aes(x = sox4_x, y = sox4_y, label = "SOX4"), color = "white", fontface = "bold", size = 4) +
-    geom_text(aes(x = target_x * 1.14, y = target_y * 1.14, label = target), size = 3) +
-    facet_wrap(~group) +
-    scale_color_manual(
-      values = c("positive association" = "#B2182B", "negative association" = "#2166AC")
-    ) +
-    scale_linewidth(range = c(0.35, 2.2), guide = "none") +
-    scale_size(range = c(2, 6), name = "Max mean expression") +
-    coord_equal(xlim = c(-1.3, 1.3), ylim = c(-1.3, 1.3), clip = "off") +
-    theme_void() +
-    theme(
-      legend.position = "bottom",
-      plot.title = element_text(face = "bold", hjust = 0.5),
-      plot.subtitle = element_text(hjust = 0.5)
-    ) +
-    labs(
-      title = "SOX4 target-gene association network",
-      subtitle = paste("Regulon:", sox4_regulon),
-      color = "SOX4 AUC vs target expression"
-    )
-}
-
 make_sox4_heatmap <- function(expression_matrix, groups, association_table) {
   if (nrow(expression_matrix) == 0L) {
     return(NULL)
@@ -1598,77 +1304,6 @@ make_sox4_heatmap <- function(expression_matrix, groups, association_table) {
   )
 }
 
-make_sox4_scatter_plot <- function(
-    association_table,
-    expression_matrix,
-    auc_matrix,
-    sox4_regulon,
-    groups,
-    n_targets,
-    group_palette = NULL) {
-  selected_targets <- association_table %>%
-    filter(selected_for_plot, target %in% rownames(expression_matrix)) %>%
-    distinct(target, plot_score) %>%
-    arrange(desc(plot_score), target) %>%
-    slice_head(n = n_targets) %>%
-    pull(target)
-  if (length(selected_targets) == 0L) {
-    return(NULL)
-  }
-
-  sox4_auc <- as.numeric(auc_matrix[sox4_regulon, colnames(expression_matrix)])
-  names(sox4_auc) <- colnames(expression_matrix)
-  plot_data <- bind_rows(lapply(selected_targets, function(target) {
-    target_expression <- dense_feature_vector(expression_matrix, target)
-    tibble(
-      cell_id = colnames(expression_matrix),
-      target = target,
-      sox4_auc = sox4_auc[colnames(expression_matrix)],
-      expression = target_expression[colnames(expression_matrix)],
-      group = groups[colnames(expression_matrix)]
-    )
-  }))
-
-  correlation_labels <- association_table %>%
-    filter(target %in% selected_targets) %>%
-    mutate(
-      label = ifelse(
-        is.na(spearman_rho),
-        paste0(group, ": rho=NA"),
-        paste0(group, ": rho=", sprintf("%.2f", spearman_rho))
-      )
-    ) %>%
-    group_by(target) %>%
-    summarise(label = paste(label, collapse = "\n"), .groups = "drop")
-
-  plot <- ggplot(plot_data, aes(sox4_auc, expression, color = group)) +
-    geom_point(size = 0.25, alpha = 0.35) +
-    geom_smooth(method = "lm", se = FALSE, linewidth = 0.5) +
-    facet_wrap(~target, scales = "free_y", ncol = 4) +
-    geom_text(
-      data = correlation_labels,
-      aes(x = -Inf, y = Inf, label = label),
-      inherit.aes = FALSE,
-      hjust = -0.05,
-      vjust = 1.1,
-      size = 2.2,
-      color = "black"
-    ) +
-    theme_bw() +
-    theme(
-      strip.text = element_text(face = "bold"),
-      legend.position = "bottom"
-    ) +
-    labs(
-      title = "SOX4 regulon activity versus target-gene expression",
-      subtitle = paste("Regulon:", sox4_regulon),
-      x = "SOX4 regulon AUC",
-      y = "Target expression",
-      color = "T-cell state"
-    )
-  add_group_color_scale(plot, group_palette)
-}
-
 # ---------------------------------------------------------------------------
 # Main workflow
 # ---------------------------------------------------------------------------
@@ -1704,13 +1339,10 @@ message(
   nrow(auc_matrix), " regulons."
 )
 
-# 3. Rank regulons by between-group variation and select separate counts for
-# grouped summaries and the more space-intensive UMAP panel.
+# 3. Rank regulons by between-group variation for grouped summaries.
 summary_result <- summarise_regulons(auc_matrix, groups)
 n_top <- min(config$n_top_regulons, nrow(auc_matrix))
 top_regulons <- summary_result$top_regulons[seq_len(n_top)]
-n_umap <- min(config$n_umap_regulons, length(top_regulons))
-umap_regulons <- top_regulons[seq_len(n_umap)]
 
 # 4. Write tidy summary statistics and the exact regulon order used in plots.
 write_csv(
@@ -1777,38 +1409,33 @@ write_csv(
   file.path(config$table_dir, "pyscenic_curated_tf_interpretation.csv")
 )
 
-curated_table_plot <- make_curated_tf_table_plot(curated_tf_table)
-save_ggplot(
-  curated_table_plot,
-  file.path(config$figure_dir, "pyscenic_curated_tf_interpretation_table"),
-  width = 18,
-  height = 11,
-  overwrite = config$overwrite_plots
-)
-
 detected_curated <- curated_tf_table %>% filter(detected)
 if (nrow(detected_curated) == 0L) {
   message("[SKIP] None of the curated TF regulons were detected in the AUCell loom.")
 } else {
   curated_regulons <- detected_curated$matched_regulon
-  curated_tf_labels <- detected_curated$tf
+  curated_tf_labels <- ifelse(
+    is.na(detected_curated$regulon_sign),
+    detected_curated$tf,
+    paste0(detected_curated$tf, " (", detected_curated$regulon_sign, ")")
+  )
 
   curated_heatmap_matrix <- summary_result$zscore[curated_regulons, , drop = FALSE]
   rownames(curated_heatmap_matrix) <- curated_tf_labels
-  curated_heatmap <- Heatmap(
+  if (config$group_by == "cell_type" && exists("cell_type_levels", inherits = TRUE)) {
+    ordered_cell_types <- get("cell_type_levels", inherits = TRUE)
+    ordered_columns <- ordered_cell_types[ordered_cell_types %in% colnames(curated_heatmap_matrix)]
+    ordered_columns <- c(ordered_columns, setdiff(colnames(curated_heatmap_matrix), ordered_columns))
+    curated_heatmap_matrix <- curated_heatmap_matrix[, ordered_columns, drop = FALSE]
+  }
+  if (!requireNamespace("SeuratExtend", quietly = TRUE)) {
+    stop("SeuratExtend is required for the curated TF heatmap.", call. = FALSE)
+  }
+  curated_heatmap <- SeuratExtend::Heatmap(
     curated_heatmap_matrix,
-    name = "z-score",
-    col = colorRamp2(c(-2, 0, 2), c("#2166AC", "#F7F7F7", "#B2182B")),
-    cluster_rows = FALSE,
-    cluster_columns = FALSE,
-    show_row_names = TRUE,
-    row_names_gp = gpar(fontsize = 9, fontface = "bold"),
-    column_names_gp = gpar(fontsize = 9),
-    border = TRUE,
-    row_title = "Curated TF regulons",
-    column_title = paste("Relative regulon activity by", config$group_by)
+    lab_fill = "zscore"
   )
-  save_complex_heatmap(
+  save_ggplot(
     curated_heatmap,
     file.path(config$figure_dir, "pyscenic_curated_tf_heatmap"),
     width = 9,
@@ -1816,57 +1443,6 @@ if (nrow(detected_curated) == 0L) {
     overwrite = config$overwrite_plots
   )
 
-  curated_dotplot_data <- make_dotplot_data(auc_matrix, groups, curated_regulons) %>%
-    left_join(
-      detected_curated %>% select(tf, matched_regulon),
-      by = c("regulon" = "matched_regulon")
-    )
-  curated_dotplot_data$tf <- factor(
-    curated_dotplot_data$tf,
-    levels = rev(curated_tf_labels)
-  )
-  curated_dotplot_data$group <- factor(
-    curated_dotplot_data$group,
-    levels = unique(groups)
-  )
-  curated_dotplot <- ggplot(curated_dotplot_data, aes(group, tf)) +
-    geom_point(aes(size = percent_active, color = mean_auc)) +
-    scale_color_viridis_c(option = "plasma") +
-    scale_size(range = c(1.5, 8)) +
-    theme_bw() +
-    theme(
-      axis.title = element_blank(),
-      axis.text.x = element_text(angle = 45, hjust = 1),
-      axis.text.y = element_text(face = "bold"),
-      panel.grid = element_line(linewidth = 0.2, color = "grey90")
-    ) +
-    labs(
-      title = "Curated TF regulon activity",
-      color = "Mean AUC",
-      size = "% above median"
-    )
-  save_ggplot(
-    curated_dotplot,
-    file.path(config$figure_dir, "pyscenic_curated_tf_dotplot"),
-    width = max(9, length(unique(groups)) * 0.9),
-    height = max(6, nrow(detected_curated) * 0.34),
-    overwrite = config$overwrite_plots
-  )
-
-  curated_umap_plot <- make_curated_tf_umap_plots(
-    auc_matrix = auc_matrix,
-    seurat_obj = seurat_obj,
-    reduction = config$reduction,
-    regulons = curated_regulons,
-    tf_labels = curated_tf_labels
-  )
-  save_ggplot(
-    curated_umap_plot,
-    file.path(config$figure_dir, "pyscenic_curated_tf_umap"),
-    width = 12,
-    height = ceiling(nrow(detected_curated) / 3) * 3.5,
-    overwrite = config$overwrite_plots
-  )
 }
 
 curated_tf_expression_matrix <- get_expression_matrix(
@@ -1875,12 +1451,6 @@ curated_tf_expression_matrix <- get_expression_matrix(
   layer = config$expr_layer,
   features = curated_tf_table$tf,
   cells = colnames(auc_matrix)
-)
-curated_tf_feature_umap <- make_curated_tf_feature_umap_plots(
-  expression_matrix = curated_tf_expression_matrix,
-  seurat_obj = seurat_obj,
-  reduction = config$reduction,
-  tf_labels = curated_tf_table$tf
 )
 curated_tf_expression_status <- curated_tf_table %>%
   transmute(
@@ -1891,17 +1461,6 @@ write_csv(
   curated_tf_expression_status,
   file.path(config$table_dir, "pyscenic_curated_tf_feature_status.csv")
 )
-if (is.null(curated_tf_feature_umap)) {
-  message("[SKIP] No curated TF genes were present for feature UMAP plotting.")
-} else {
-  save_ggplot(
-    curated_tf_feature_umap,
-    file.path(config$figure_dir, "pyscenic_curated_tf_feature_umap"),
-    width = 12,
-    height = ceiling(nrow(curated_tf_expression_matrix) / 3) * 3.5,
-    overwrite = config$overwrite_plots
-  )
-}
 
 # 8. Focused Vd2 effector-state comparison. This reuses the all-cell
 # pySCENIC AUCell matrix already loaded above; it does not rerun pySCENIC on
@@ -1921,27 +1480,6 @@ if (is.null(vd2_effector_comparison)) {
     file.path(config$table_dir, "pyscenic_vd2_effector_regulon_delta.csv")
   )
 
-  vd2_effector_heatmap <- Heatmap(
-    vd2_effector_comparison$heatmap_matrix,
-    name = "z-score",
-    col = colorRamp2(c(-2, 0, 2), c("#2166AC", "#F7F7F7", "#B2182B")),
-    cluster_rows = TRUE,
-    cluster_columns = FALSE,
-    show_row_names = TRUE,
-    row_names_gp = gpar(fontsize = 8),
-    column_names_gp = gpar(fontsize = 9),
-    border = TRUE,
-    row_title = "Regulons (* curated)",
-    column_title = "Relative regulon activity in Vd2 effector states"
-  )
-  save_complex_heatmap(
-    vd2_effector_heatmap,
-    file.path(config$figure_dir, "pyscenic_vd2_effector_regulon_heatmap"),
-    width = 8,
-    height = max(6, nrow(vd2_effector_comparison$heatmap_matrix) * 0.24),
-    overwrite = config$overwrite_plots
-  )
-
   vd2_effector_dotplot <- plot_vd2_effector_dotplot(vd2_effector_comparison$dotplot_data)
   save_ggplot(
     vd2_effector_dotplot,
@@ -1951,30 +1489,17 @@ if (is.null(vd2_effector_comparison)) {
     overwrite = config$overwrite_plots
   )
 
-  vd2_effector_delta_plot <- plot_vd2_effector_delta(vd2_effector_comparison$delta_plot_data)
-  if (is.null(vd2_effector_delta_plot)) {
-    message("[SKIP] Vd2 effector regulon delta plot has no data.")
-  } else {
-    save_ggplot(
-      vd2_effector_delta_plot,
-      file.path(config$figure_dir, "pyscenic_vd2_effector_regulon_delta_plot"),
-      width = 10,
-      height = 12,
-      overwrite = config$overwrite_plots
-    )
-  }
 }
 
 # 9. ZOL FOXP3+ Vd2 focused function-gene view. This combines the all-cell
 # pySCENIC FOXP3 regulon AUC, if detected, with expression of regulatory,
-# checkpoint, effector-context, and stress/fitness genes in the same three
-# Vd2 states. It is a visualization/statistics subset only.
+# checkpoint, effector-context, and stress/fitness genes across all Vd2
+# states. It is a visualization/statistics subset only.
 zol_foxp3_function_result <- make_zol_foxp3_function_gene_analysis(
   auc_matrix = auc_matrix,
   seurat_obj = seurat_obj,
   assay = config$assay,
   layer = config$expr_layer,
-  reduction = config$reduction,
   states = zol_foxp3_vd2_states,
   gene_sets = zol_foxp3_function_gene_sets
 )
@@ -1999,7 +1524,7 @@ if (is.null(zol_foxp3_function_result)) {
     save_complex_heatmap(
       zol_foxp3_function_result$heatmap,
       file.path(config$figure_dir, "pyscenic_zol_foxp3_vd2_function_gene_heatmap"),
-      width = 8,
+      width = max(8, length(zol_foxp3_function_result$states) * 0.8),
       height = 8,
       overwrite = config$overwrite_plots
     )
@@ -2010,30 +1535,8 @@ if (is.null(zol_foxp3_function_result)) {
     save_ggplot(
       zol_foxp3_function_result$dotplot,
       file.path(config$figure_dir, "pyscenic_zol_foxp3_vd2_function_gene_dotplot"),
-      width = 8,
+      width = max(8, length(zol_foxp3_function_result$states) * 0.8),
       height = 8,
-      overwrite = config$overwrite_plots
-    )
-  }
-  if (is.null(zol_foxp3_function_result$umap)) {
-    message("[SKIP] ZOL FOXP3+ function-gene UMAP has no selected genes.")
-  } else {
-    save_ggplot(
-      zol_foxp3_function_result$umap,
-      file.path(config$figure_dir, "pyscenic_zol_foxp3_vd2_function_gene_umap"),
-      width = 14,
-      height = 10,
-      overwrite = config$overwrite_plots
-    )
-  }
-  if (is.null(zol_foxp3_function_result$foxp3_regulon_boxplot)) {
-    message("[SKIP] FOXP3 regulon was not detected or had no cells for boxplot.")
-  } else {
-    save_ggplot(
-      zol_foxp3_function_result$foxp3_regulon_boxplot,
-      file.path(config$figure_dir, "pyscenic_zol_foxp3_vd2_foxp3_regulon_boxplot"),
-      width = 7,
-      height = 5,
       overwrite = config$overwrite_plots
     )
   }
@@ -2063,24 +1566,8 @@ if (nrow(sox4_result$target_table) > 0L) {
 }
 
 if (!is.na(sox4_result$sox4_regulon) &&
-    nrow(sox4_result$target_table) > 0L &&
-    nrow(sox4_result$expression_matrix) > 0L) {
-  sox4_network <- make_sox4_network_plot(
-    sox4_result$target_table,
-    sox4_result$sox4_regulon
-  )
-  if (is.null(sox4_network)) {
-    message("[SKIP] SOX4 network plot has no estimable positive/negative associations.")
-  } else {
-    save_ggplot(
-      sox4_network,
-      file.path(config$figure_dir, "pyscenic_sox4_target_network_by_state"),
-      width = 12,
-      height = max(8, ceiling(length(unique(groups)) / 2) * 4),
-      overwrite = config$overwrite_plots
-    )
-  }
-
+  nrow(sox4_result$target_table) > 0L &&
+  nrow(sox4_result$expression_matrix) > 0L) {
   sox4_heatmap <- make_sox4_heatmap(
     sox4_result$expression_matrix,
     groups,
@@ -2098,45 +1585,9 @@ if (!is.na(sox4_result$sox4_regulon) &&
     )
   }
 
-  sox4_scatter <- make_sox4_scatter_plot(
-    association_table = sox4_result$target_table,
-    expression_matrix = sox4_result$expression_matrix,
-    auc_matrix = auc_matrix,
-    sox4_regulon = sox4_result$sox4_regulon,
-    groups = groups,
-    n_targets = config$sox4_scatter_targets,
-    group_palette = group_palette
-  )
-  if (is.null(sox4_scatter)) {
-    message("[SKIP] SOX4 scatter plot has no available target genes.")
-  } else {
-    save_ggplot(
-      sox4_scatter,
-      file.path(config$figure_dir, "pyscenic_sox4_target_scatter"),
-      width = 14,
-      height = max(8, ceiling(min(config$sox4_scatter_targets, nrow(sox4_result$expression_matrix)) / 4) * 3.4),
-      overwrite = config$overwrite_plots
-    )
-  }
 }
 
-# 11. UMAP panels: show single-cell heterogeneity for the most group-variable
-# regulons using the existing Seurat reduction.
-umap_plot <- make_umap_plots(
-  auc_matrix,
-  seurat_obj,
-  config$reduction,
-  umap_regulons
-)
-save_ggplot(
-  umap_plot,
-  file.path(config$figure_dir, "pyscenic_regulon_activity_umap_top"),
-  width = 12,
-  height = ceiling(n_umap / 3) * 3.5,
-  overwrite = config$overwrite_plots
-)
-
-# 12. Save the aligned AUC matrix and derived summaries for custom follow-up
+# 11. Save the aligned AUC matrix and derived summaries for custom follow-up
 # plots without reopening the loom. This object can be large because it
 # contains regulon activity for every aligned cell.
 result <- list(
@@ -2147,7 +1598,6 @@ result <- list(
   zscore_by_group = summary_result$zscore,
   specificity = summary_result$specificity,
   selected_regulons = top_regulons,
-  umap_regulons = umap_regulons,
   curated_tf_table = curated_tf_table,
   detected_curated_regulons = detected_curated,
   curated_tf_expression_status = curated_tf_expression_status,
