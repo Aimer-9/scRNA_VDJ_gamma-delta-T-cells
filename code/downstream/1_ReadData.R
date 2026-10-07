@@ -77,11 +77,31 @@ if (output_files_exist(c(vdj_annotation_filtered_rds, vdj_annotation_stat_rds, s
   message("[PLOT] Re-drawing 1_ReadData figures without forcing checkpoint RDS overwrites.")
 }
 
-read_vdj_annotation <- function(filepath) {
+read_vdj_annotation <- function(filepath, sample_id) {
   annotation <- read.csv(filepath)
-  annotation$sample <- str_split(annotation$sample, "_", simplify = TRUE)[, 1]
+  if (missing(sample_id) || length(sample_id) != 1 || is.na(sample_id) || sample_id == "") {
+    stop("A non-empty sample ID is required for VDJ annotation: ", filepath, call. = FALSE)
+  }
+  # `all_contig_annotations.csv` differs across Cell Ranger releases: some
+  # versions include `sample`, while others do not. The enclosing directory is
+  # authoritative because this function reads one file per known sample.
+  annotation$sample <- sample_id
   annotation$barcode <- paste0(annotation$sample, "_", annotation$barcode)
   annotation
+}
+
+validate_join_key <- function(data, key, label, require_unique = FALSE) {
+  if (!key %in% colnames(data)) {
+    stop(label, " is missing required join key `", key, "`. Available columns: ", paste(colnames(data), collapse = ", "), call. = FALSE)
+  }
+  if (anyNA(data[[key]]) || any(data[[key]] == "")) {
+    stop(label, " contains missing or empty `", key, "` values.", call. = FALSE)
+  }
+  if (require_unique && anyDuplicated(data[[key]])) {
+    duplicates <- unique(data[[key]][duplicated(data[[key]])])
+    stop(label, " contains duplicated `", key, "` values: ", paste(duplicates, collapse = ", "), call. = FALSE)
+  }
+  invisible(data)
 }
 
 read_10x_counts <- function(matrix_dir) {
@@ -236,29 +256,29 @@ merge_seurat_samples <- function(seurat_list, sample_ids) {
 }
 
 # rawdata and metadata PATH
-sample_list <- dir(cellranger_dir) %>%
-  str_extract("(.*)(_add_enrichment_primers)", group = 1) %>%
-  na.omit()
+# Cell Ranger output directories are named directly by sample ID (for example,
+# `Ab3-2` or `ZOL-7`); non-sample entries are removed after matching metadata.
+sample_list <- dir(cellranger_dir)
 # exp file paths
 raw_matrix_filepath <-
   paste0(
     cellranger_dir, "/",
     sample_list,
-    "_add_enrichment_primers/outs/multi/count/raw_feature_bc_matrix/"
+    "/outs/multi/count/raw_feature_bc_matrix/"
   )
 filtered_matrix_filepath <-
   paste0(
     cellranger_dir, "/",
     sample_list,
-    "_add_enrichment_primers/outs/per_sample_outs/",
-    sample_list, "_add_enrichment_primers/count/sample_filtered_feature_bc_matrix/"
+    "/outs/per_sample_outs/",
+    sample_list, "/count/sample_filtered_feature_bc_matrix/"
   )
 # vdj annotation file paths
 data_annotation_filepath <-
   paste0(
     cellranger_dir, "/",
     sample_list,
-    "_add_enrichment_primers/outs/multi/vdj_t_gd/all_contig_annotations.csv"
+    "/outs/multi/vdj_t_gd/all_contig_annotations.csv"
   )
 # metadata file path
 meta <- read.csv(metadata_file)
@@ -281,14 +301,21 @@ data_annotation_filepath <- data_annotation_filepath[keep_samples]
 # combine all annotation data into one dataframe
 all_annotation <-
   lapply(seq_along(sample_list), function(i) {
-    read_vdj_annotation(data_annotation_filepath[i])
+    read_vdj_annotation(data_annotation_filepath[i], sample_list[i])
   }) %>%
   Reduce(bind_rows, .)
-# merge with metadata
+# Join VDJ annotations to metadata. Explicit key validation avoids the opaque
+# base::merge() `fix.by` error when an input schema has changed.
 # sample is the name in raw data when sequencing
 # sample_name is the proper sample name, with group info and batch info
 # e.g. AB3_2 means group AB3, batch 2
-all_annotation <- merge(all_annotation, meta, by.x = "sample", by.y = "sample_id")
+validate_join_key(all_annotation, "sample", "VDJ annotations")
+validate_join_key(meta, "sample_id", "Sample metadata", require_unique = TRUE)
+all_annotation <- all_annotation %>%
+  inner_join(meta, by = c("sample" = "sample_id"))
+if (nrow(all_annotation) == 0) {
+  stop("No VDJ annotation samples matched `sample_id` in metadata. Check Cell Ranger sample names and config/samples.csv.", call. = FALSE)
+}
 # stat Vδ and Vγ gene usage, create new columns for each V gene of interest
 # because one cell can have multiple contigs, we need to group by barcode
 # and check if the V gene of interest is present in any of the contigs
@@ -366,15 +393,15 @@ annotation_stat <-
   all_annotation_filter %>%
   group_by(barcode) %>%
   summarise(trd = sum(chain == "TRD"), trg = sum(chain == "TRG"))
-annotation_stat <-
-  merge(annotation_stat,
-    all_annotation_filter[, c(
-      "barcode", "Vd1", "Vd2", "Vd3",
-      "Vg2", "Vg3", "Vg4", "Vg5", "Vg8", "Vg9"
-    )],
-    by = "barcode"
-  ) %>%
-  unique()
+annotation_gene_flags <- all_annotation_filter[, c(
+  "barcode", "Vd1", "Vd2", "Vd3",
+  "Vg2", "Vg3", "Vg4", "Vg5", "Vg8", "Vg9"
+)] %>%
+  distinct()
+validate_join_key(annotation_stat, "barcode", "VDJ chain-count summary", require_unique = TRUE)
+validate_join_key(annotation_gene_flags, "barcode", "VDJ gene flags", require_unique = TRUE)
+annotation_stat <- annotation_stat %>%
+  inner_join(annotation_gene_flags, by = "barcode")
 # save filtered annotation data and stat data
 save_rds_if_missing(all_annotation_filter, vdj_annotation_filtered_rds, "filtered VDJ annotation RDS", overwrite = force_read_data)
 save_rds_if_missing(annotation_stat, vdj_annotation_stat_rds, "VDJ annotation stat RDS", overwrite = force_read_data)

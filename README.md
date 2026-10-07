@@ -138,11 +138,17 @@ Rscript code/downstream/7_CDR3pairedSankey.R
 Rscript code/downstream/8_Vd1vs2.R
 Rscript code/downstream/9_CDR3paired.R
 Rscript code/downstream/10_MSH2.R
-Rscript code/downstream/13_Vd2_pseudotime.R
-Rscript code/downstream/14_Vd1Vd2_pairwise.R
-Rscript code/downstream/15_CD80_CD86_expression.R
-Rscript code/downstream/16_Vd1Vd2_extra_visualization.R
-Rscript code/downstream/17_ZOL_PAN_effector_Vd2_comparison.R
+```
+
+For a step-1 run through the downstream runner, the Cell Ranger directory
+defaults to `<outdir>/cellranger_output`, where `outdir` is read from
+`config/params.yaml`. Provide alternate paths when needed:
+
+```bash
+bash scripts/run_downstream.sh --step 1 \
+  --params config/params.yaml \
+  --samples config/samples.csv \
+  --cellranger-dir /path/to/cellranger_output
 ```
 
 To run the downstream R scripts in order and send one final email on success or failure, use:
@@ -215,11 +221,6 @@ To rebuild a script's outputs without manually deleting files, set that script's
 - `8_Vd1vs2.R`: `force_vd1_vs_vd2`; `force_vd1_vs_vd2_plot`
 - `9_CDR3paired.R`: `force_ranked_rds`; `force_ranked_plot`
 - `10_MSH2.R`: `force_msh2`; `force_msh2_plot`
-- `13_Vd2_pseudotime.R`: `force_vd2_pseudotime`; `force_vd2_pseudotime_plot`
-- `14_Vd1Vd2_pairwise.R`: `force_vd1_vd2_pairwise`; `force_vd1_vd2_pairwise_plot`
-- `15_CD80_CD86_expression.R`: `force_cd80_cd86_plot`
-- `16_Vd1Vd2_extra_visualization.R`: `force_vd1_vd2_extra`; `force_vd1_vd2_extra_plot`
-- `17_ZOL_PAN_effector_Vd2_comparison.R`: `force_zol_pan_effector_vd2`; `force_zol_pan_effector_vd2_plot`
 - `12_pySCENIC_visualization.R`: `force_pyscenic_visualization` or CLI `--overwrite`; use `force_pyscenic_visualization_plot` or CLI `--overwrite-plots` for figures only
 
 `code/downstream/11_pySCENIC.sh` is the pySCENIC workflow. It selects a balanced 10,000-cell subset by `cell_type`, exports expression with sparse-aware chunks, and runs the Python pySCENIC steps through `code/downstream/lib/pyscenic_run.py`; use `--pyscenic-python` to run the Python part from a specific conda environment.
@@ -271,15 +272,10 @@ Figures are written to step-specific subdirectories under `figures/`, for exampl
 
 `9_CDR3paired.R` also writes `table/trdg_clone_dispersion_metrics.csv` to describe how dispersed each exact paired TRD+TRG clone is. For each clone, the script first finds all cells with the same `TRD||TRG` pair. UMAP dispersion is calculated as the mean Euclidean distance from each clone cell to that clone's UMAP centroid, using `umap.unintegrated` when available and otherwise `umap`. Hallmark pathway dispersion is calculated from Hallmark AUCell scores: for each Hallmark pathway, the script calculates the standard deviation across cells in the clone, then averages those pathway-level standard deviations. The two raw metrics are min-max scaled across clones as `umap_mean_distance_scaled` and `hallmark_mean_pathway_sd_scaled`; `dispersion_score` is the mean of those two scaled values. Group, sample, and cell-type entropy/evenness values are saved as descriptive annotations, but they do not contribute to `dispersion_score`.
 
-`13_Vd2_pseudotime.R` runs a Monocle3 trajectory on about 5,000 Vd2 cells from exact paired TRD+TRG clones, using the same clone-ranking rules as `9_CDR3paired.R`: each selected clone must be a single-cell TRD/TRG pair and the same pair must appear in Naive, ZOL, and PAN groups. It roots pseudotime in `Effector Memory Vd2` and saves UMAP, violin, density, sample-summary, gene-expression, gene-pseudotime, and pseudotime-expression heatmap visualizations.
+`8_Vd1vs2.R` includes the retained Vd1/Vd2 marker dotplots, TRDV1/TRDV2 violin, and module-score violin, in addition to its Hallmark panels.
 
-`14_Vd1Vd2_pairwise.R` performs non-pseudotime pairwise comparisons for `Naive Vd1` versus `Effector Memory Vd2`, and `Effector Vd1` versus `PAN Effector Vd2`. It saves differential-expression tables, marker-expression summaries, UMAP highlights, volcano plots, marker dotplots, expression heatmaps, sample-level expression plots, and Hallmark AUCell delta plots.
 
-`15_CD80_CD86_expression.R` plots CD80 and CD86 expression on fixed-coordinate UMAPs and condition-group dotplots from the final annotated Seurat object.
-
-`16_Vd1Vd2_extra_visualization.R` adds figure-first Vd1/Vd2 comparison panels: UMAP state highlights, sample-level cell fractions, curated marker dotplots and heatmaps, module-score summaries, expanded DE volcano/overlap/top-gene heatmaps, and repertoire-aware clone-size, top-CDR3, paired-clone alluvial, and paired-clone sharing heatmap outputs.
-
-`17_ZOL_PAN_effector_Vd2_comparison.R` focuses on `ZOL Effector Vd2` versus `PAN Effector Vd2`: UMAP context/density, sample-level abundance and ratio plots, curated marker and module-score summaries, DE volcano/lollipop/top-gene heatmap, Hallmark pathway delta/selected heatmap, and clone-size/top-CDR3/paired-clone repertoire views. Its module-score violin additionally includes `ZOL FOXP3+ Vd2` and shows all pairwise state comparisons; the remaining Step 17 analyses retain the ZOL-versus-PAN scope.
+`8_Vd1vs2.R` also generates `zol_pan_effector_vd2_module_score_violin`, which includes `ZOL FOXP3+ Vd2` and shows all pairwise state comparisons.
 
 ## Downstream Order
 
@@ -296,11 +292,6 @@ The downstream dependency chain is:
         -> 8_Vd1vs2.R
           -> 9_CDR3paired.R
           -> 10_MSH2.R
-          -> 13_Vd2_pseudotime.R
-          -> 14_Vd1Vd2_pairwise.R
-          -> 15_CD80_CD86_expression.R
-          -> 16_Vd1Vd2_extra_visualization.R
-          -> 17_ZOL_PAN_effector_Vd2_comparison.R
       -> 11_pySCENIC.sh
         -> 12_pySCENIC_visualization.R
 ```

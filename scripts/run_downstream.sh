@@ -19,6 +19,9 @@ continue_on_error="${CONTINUE_ON_ERROR:-false}"
 targets_mode="false"
 selected_step="${STEP:-}"
 existing_run="${EXISTING_RUN:-}"
+params_file="${PARAMS_FILE:-code/config/params.yaml}"
+samples_file="${SAMPLES_FILE:-code/config/samples.csv}"
+cellranger_dir="${CELLRANGER_DIR:-}"
 log_dir_explicit="false"
 pyscenic_args=()
 
@@ -35,6 +38,9 @@ Options:
   --resume-run DIR       Alias for --existing-run
   --log-dir DIR          Log directory, default: <run-dir>/logs
   --rscript CMD          Rscript command, default: Rscript
+  --params PATH          Parameters YAML used to derive Cell Ranger output, default: code/config/params.yaml
+  --samples PATH         Samples CSV passed to downstream scripts, default: code/config/samples.csv
+  --cellranger-dir DIR   Cell Ranger output directory; default: <params outdir>/cellranger_output
   --email EMAIL          Final notification recipient, default: disabled
   --mail-cmd CMD         Mail command, default: msmtp
   --mail-from EMAIL      Sender address, default: MAIL_FROM or empty
@@ -141,14 +147,22 @@ prepare_run_directory() {
     local dest_script
     dest_script="${prepared_downstream_dir}/$(basename "$source_script")"
     cp "$source_script" "$dest_script"
-    RUN_DIR_FOR_R="$run_dir" perl -0pi -e '
+    RUN_DIR_FOR_R="$run_dir" CELLRANGER_DIR_FOR_R="$cellranger_dir" SAMPLES_FILE_FOR_R="$samples_file" perl -0pi -e '
       my $d = $ENV{"RUN_DIR_FOR_R"};
+      my $c = $ENV{"CELLRANGER_DIR_FOR_R"};
+      my $s = $ENV{"SAMPLES_FILE_FOR_R"};
       $d =~ s/\\/\\\\/g;
       $d =~ s/"/\\"/g;
+      $c =~ s/\\/\\\\/g;
+      $c =~ s/"/\\"/g;
+      $s =~ s/\\/\\\\/g;
+      $s =~ s/"/\\"/g;
       s#setwd\("/path/to/project"\)#"setwd(\"$d\")"#eg;
       s#project_dir <- "/path/to/project"#"project_dir <- \"$d\""#eg;
       s#project_dir = "/path/to/project"#"project_dir = \"$d\""#eg;
       s#PROJECT_DIR="\$\{PROJECT_DIR:-/path/to/project\}"#"PROJECT_DIR=\"\${PROJECT_DIR:-$d}\""#eg;
+      s#cellranger_dir <- "/path/to/cellranger/output"#"cellranger_dir <- \"$c\""#eg;
+      s#metadata_file <- "config/samples.csv"#"metadata_file <- \"$s\""#eg;
     ' "$dest_script"
     chmod --reference="$source_script" "$dest_script" 2>/dev/null || true
   done
@@ -179,6 +193,9 @@ parse_args() {
         shift 2
         ;;
       --rscript) rscript_cmd="$2"; shift 2 ;;
+      --params) params_file="$2"; shift 2 ;;
+      --samples) samples_file="$2"; shift 2 ;;
+      --cellranger-dir) cellranger_dir="$2"; shift 2 ;;
       --email) notify_email="$2"; shift 2 ;;
       --mail-cmd) mail_cmd="$2"; shift 2 ;;
       --mail-from) mail_from="$2"; shift 2 ;;
@@ -393,16 +410,34 @@ if [[ "$targets_mode" == "true" ]]; then
       8) target_name="step_08_vd1_vs_vd2" ;;
       9) target_name="step_09_cdr3_paired" ;;
       10) target_name="step_10_msh2" ;;
-      13) target_name="step_13_vd2_pseudotime" ;;
-      14) target_name="step_14_vd1_vd2_pairwise" ;;
-      15) target_name="step_15_cd80_cd86" ;;
-      16) target_name="step_16_vd1_vd2_extra" ;;
-      17) target_name="step_17_zol_pan_effector_vd2" ;;
       *) die "No targets compatibility mapping for downstream step: $selected_step" ;;
     esac
     target_args=(--target "$target_name")
   fi
   exec Rscript --vanilla "${script_dir}/code/pipeline/run.R" "${target_args[@]}"
+fi
+params_file="$(make_abs_path "$params_file")"
+samples_file="$(make_abs_path "$samples_file")"
+needs_cellranger="false"
+if [[ -z "$selected_step" || "$selected_step" =~ (^|/)1(_|\.|$) ]]; then
+  needs_cellranger="true"
+fi
+if [[ "$needs_cellranger" == "true" ]]; then
+  [[ -f "$params_file" ]] || die "Params file not found: $params_file"
+  [[ -f "$samples_file" ]] || die "Samples file not found: $samples_file"
+  if [[ -z "$cellranger_dir" ]]; then
+    cellranger_outdir="$(awk -F: '/^[[:space:]]*outdir:[[:space:]]*/ {sub(/^[[:space:]]*outdir:[[:space:]]*/, ""); print; exit}' "$params_file")"
+    cellranger_outdir="${cellranger_outdir#\"}"
+    cellranger_outdir="${cellranger_outdir%\"}"
+    [[ -n "$cellranger_outdir" ]] || die "Missing outdir in params file: $params_file"
+    cellranger_outdir="$(make_abs_path "$cellranger_outdir")"
+    cellranger_dir="${cellranger_outdir}/cellranger_output"
+  else
+    cellranger_dir="$(make_abs_path "$cellranger_dir")"
+  fi
+  [[ -d "$cellranger_dir" ]] || die "Cell Ranger output directory not found: $cellranger_dir"
+else
+  cellranger_dir="/path/to/cellranger/output"
 fi
 if [[ -n "$existing_run" ]]; then
   run_dir="$(resolve_existing_run_dir "$existing_run")" || die "Existing run directory not found: $existing_run"
@@ -435,11 +470,6 @@ main_scripts=(
   "${prepared_downstream_dir}/8_Vd1vs2.R"
   "${prepared_downstream_dir}/9_CDR3paired.R"
   "${prepared_downstream_dir}/10_MSH2.R"
-  "${prepared_downstream_dir}/13_Vd2_pseudotime.R"
-  "${prepared_downstream_dir}/14_Vd1Vd2_pairwise.R"
-  "${prepared_downstream_dir}/15_CD80_CD86_expression.R"
-  "${prepared_downstream_dir}/16_Vd1Vd2_extra_visualization.R"
-  "${prepared_downstream_dir}/17_ZOL_PAN_effector_Vd2_comparison.R"
 )
 all_scripts=(
   "${prepared_downstream_dir}/1_ReadData.R"
@@ -454,11 +484,6 @@ all_scripts=(
   "${prepared_downstream_dir}/10_MSH2.R"
   "${prepared_downstream_dir}/11_pySCENIC.sh"
   "${prepared_downstream_dir}/12_pySCENIC_visualization.R"
-  "${prepared_downstream_dir}/13_Vd2_pseudotime.R"
-  "${prepared_downstream_dir}/14_Vd1Vd2_pairwise.R"
-  "${prepared_downstream_dir}/15_CD80_CD86_expression.R"
-  "${prepared_downstream_dir}/16_Vd1Vd2_extra_visualization.R"
-  "${prepared_downstream_dir}/17_ZOL_PAN_effector_Vd2_comparison.R"
 )
 
 if [[ -n "$selected_step" ]]; then

@@ -318,7 +318,7 @@ save_marker_feature_plot <- function(seurat_obj, features, title, filename, widt
     return(invisible(FALSE))
   }
 
-  marker_plot <- DimPlot2(
+  marker_plot <- SeuratExtend::DimPlot2(
     seurat_obj,
     features = present_features,
     reduction = "umap.unintegrated",

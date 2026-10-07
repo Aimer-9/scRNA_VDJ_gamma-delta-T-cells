@@ -1,8 +1,7 @@
 legacy_steps <- c(
   "1_ReadData.R", "2_DataClean.R", "3_cellAnnotation.R", "4_VDJgene.R", "5_CDR3stat.R",
   "6_CDR3betweenSamples.R", "7_CDR3pairedSankey.R", "8_Vd1vs2.R", "9_CDR3paired.R",
-  "10_MSH2.R", "13_Vd2_pseudotime.R", "14_Vd1Vd2_pairwise.R", "15_CD80_CD86_expression.R",
-  "16_Vd1Vd2_extra_visualization.R", "17_ZOL_PAN_effector_Vd2_comparison.R"
+  "10_MSH2.R"
 )
 
 legacy_step_outputs <- function(config, step) {
@@ -15,7 +14,6 @@ legacy_step_outputs <- function(config, step) {
     "4_VDJgene.R" = file.path(rds, "all_annotation_included.rds"),
     "7_CDR3pairedSankey.R" = file.path(rds, "barcode_trgd_paired.rds"),
     "9_CDR3paired.R" = file.path(rds, c("trdg_pair_rank_metadata.rds", "all_seurat_celltype_toprank_cells.rds", "pr_graph_test_res_toprank.rds")),
-    "13_Vd2_pseudotime.R" = file.path(table, "toprank_vd2_trdg_pairs_for_monocle3.csv"),
     character()
   )
 }

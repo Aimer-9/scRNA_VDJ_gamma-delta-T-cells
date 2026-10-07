@@ -20,9 +20,4 @@ list(
   tar_target(step_08_vd1_vs_vd2, { legacy_sources; run_legacy_step(config, "8_Vd1vs2.R", step_03_cell_annotation) }, format = "file"),
   tar_target(step_09_cdr3_paired, { legacy_sources; run_legacy_step(config, "9_CDR3paired.R", step_07_cdr3_paired_sankey) }, format = "file"),
   tar_target(step_10_msh2, { legacy_sources; run_legacy_step(config, "10_MSH2.R", step_09_cdr3_paired) }, format = "file"),
-  tar_target(step_13_vd2_pseudotime, { legacy_sources; run_legacy_step(config, "13_Vd2_pseudotime.R", step_09_cdr3_paired) }, format = "file"),
-  tar_target(step_14_vd1_vd2_pairwise, { legacy_sources; run_legacy_step(config, "14_Vd1Vd2_pairwise.R", step_03_cell_annotation) }, format = "file"),
-  tar_target(step_15_cd80_cd86, { legacy_sources; run_legacy_step(config, "15_CD80_CD86_expression.R", step_03_cell_annotation) }, format = "file"),
-  tar_target(step_16_vd1_vd2_extra, { legacy_sources; run_legacy_step(config, "16_Vd1Vd2_extra_visualization.R", c(step_04_vdj_gene, step_07_cdr3_paired_sankey)) }, format = "file"),
-  tar_target(step_17_zol_pan_effector_vd2, { legacy_sources; run_legacy_step(config, "17_ZOL_PAN_effector_Vd2_comparison.R", c(step_04_vdj_gene, step_07_cdr3_paired_sankey)) }, format = "file")
 )
